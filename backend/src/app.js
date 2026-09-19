@@ -4,6 +4,7 @@ import helmet from "helmet";
 
 import healthRoutes from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import companyRoutes from "./routes/company.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { errorResponse } from "./utils/apiResponse.js";
 
@@ -39,6 +40,7 @@ app.use((req, res, next) => {
 // 5. Mount API Routes
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/companies", companyRoutes);
 
 // 6. Handle 404 for Unknown Routes
 app.use((req, res) => {
