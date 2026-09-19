@@ -9,14 +9,14 @@ This is the master backlog for the project. In accordance with the **Solo-Develo
 | ID | Epic | User Story / Task Summary | Priority | Est. Points | Target Sprint | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **PB-001** | Planning | Sprint 0: Architecture, Schemas, API Specs & Agile Docs | **Must** | 5 | Sprint 0 | **Completed** |
-| **PB-101** | Backend | Express.js project setup, environment configuration & logger | **Must** | 3 | Sprint 1 | Planned |
-| **PB-102** | Database | PostgreSQL connection pool & Drizzle ORM configuration | **Must** | 3 | Sprint 1 | Planned |
-| **PB-103** | Database | Initial Drizzle schema definition & migration setup | **Must** | 5 | Sprint 1 | Planned |
-| **PB-104** | Backend | Centralized error handling middleware & base health check API | **Must** | 2 | Sprint 1 | Planned |
-| **PB-201** | Auth | User registration endpoint with bcrypt hashing & validation | **Must** | 3 | Sprint 2 | Planned |
-| **PB-202** | Auth | User login endpoint with JWT issuance | **Must** | 3 | Sprint 2 | Planned |
-| **PB-203** | Auth | JWT verification middleware & protected `/me` profile route | **Must** | 3 | Sprint 2 | Planned |
-| **PB-204** | Auth | Logout endpoint and token lifecycle management | **Should** | 2 | Sprint 2 | Planned |
+| **PB-101** | Backend | Express.js project setup, environment configuration & logger | **Must** | 3 | Sprint 1 | **Completed** |
+| **PB-102** | Database | PostgreSQL connection pool & Drizzle ORM configuration | **Must** | 3 | Sprint 1 | **Completed** |
+| **PB-103** | Database | Initial Drizzle schema definition & migration setup | **Must** | 5 | Sprint 1 | **Completed** |
+| **PB-104** | Backend | Centralized error handling middleware & base health check API | **Must** | 2 | Sprint 1 | **Completed** |
+| **PB-201** | Auth | User registration endpoint with bcrypt hashing & validation | **Must** | 3 | Sprint 2 | **Completed** |
+| **PB-202** | Auth | User login endpoint with JWT issuance | **Must** | 3 | Sprint 2 | **Completed** |
+| **PB-203** | Auth | JWT verification middleware & protected `/me` profile route | **Must** | 3 | Sprint 2 | **Completed** |
+| **PB-204** | Auth | Logout endpoint and token lifecycle management | **Should** | 2 | Sprint 2 | **Completed** |
 | **PB-301** | Company | Companies table schema, seed script for ITC Limited profile | **Must** | 3 | Sprint 3 | Planned |
 | **PB-302** | Financials| Financial metrics schema & seeding multi-year financial statements | **Must** | 5 | Sprint 3 | Planned |
 | **PB-303** | Financials| Deterministic calculation engine for financial ratios & growth | **Must** | 5 | Sprint 3 | Planned |
