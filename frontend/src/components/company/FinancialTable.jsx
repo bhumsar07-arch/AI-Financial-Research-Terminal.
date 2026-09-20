@@ -48,7 +48,7 @@ export const FinancialTable = ({ financials, period, setPeriod, loading }) => {
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            Annual (5-Year Historical)
+            Annual Reports {period === "annual" ? `(${periods.length} Periods)` : ""}
           </button>
           <button
             onClick={() => setPeriod("quarterly")}
@@ -58,15 +58,21 @@ export const FinancialTable = ({ financials, period, setPeriod, loading }) => {
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            Quarterly (FY2024 Granular)
+            Quarterly Results {period === "quarterly" ? `(${periods.length} Periods)` : ""}
           </button>
         </div>
 
-        <div className="text-xs font-mono text-slate-400 flex items-center space-x-2">
-          <span>Reporting Currency:</span>
-          <span className="font-semibold text-slate-200 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-            {financials.currency || "INR"} (in ₹ Crores)
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Extracted from Uploaded Filings (No Seed Data)
           </span>
+          <div className="text-xs font-mono text-slate-400 flex items-center space-x-2">
+            <span>Reporting Currency:</span>
+            <span className="font-semibold text-slate-200 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+              {financials.currency || "INR"} (in ₹ Crores)
+            </span>
+          </div>
         </div>
       </div>
 

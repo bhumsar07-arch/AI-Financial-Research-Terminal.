@@ -21,9 +21,7 @@ export async function seedDatabase() {
 
     if (existingCompanies.length > 0) {
       companyId = existingCompanies[0].id;
-      console.log(`[Seed] Company ITC already exists with ID: ${companyId}. Cleaning up old financial metrics...`);
-      // Delete old financial records for ITC to avoid duplicates
-      await db.delete(financialMetrics).where(eq(financialMetrics.companyId, companyId));
+      console.log(`[Seed] Company ITC already exists with ID: ${companyId}. Real PDF values are preserved.`);
     } else {
       console.log("[Seed] Inserting ITC Limited company profile...");
       const [insertedCompany] = await db
@@ -45,9 +43,8 @@ export async function seedDatabase() {
       console.log(`[Seed] Created ITC with ID: ${companyId}`);
     }
 
-    // 2. Prepare Historical Annual Financial Statements (FY2021 to FY2025)
-    // Numbers in INR Crores
-    const annualStatements = [
+    console.log("[Seed] Preserving pure document-extracted data in financial_metrics. Run python -m app.ingestion.pipeline in rag-service to sync filings.");
+    return;
       {
         fiscalYear: 2021,
         periodType: "annual",

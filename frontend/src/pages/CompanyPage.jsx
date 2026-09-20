@@ -11,15 +11,168 @@ import {
   AlertCircle,
   ExternalLink,
   ArrowUpRight,
+  MessageSquare,
+  BookOpen,
+  AlertTriangle,
+  Eye,
 } from "lucide-react";
 import api from "../services/api.js";
 import { FinancialTable } from "../components/company/FinancialTable.jsx";
 import { FinancialCharts } from "../components/company/FinancialCharts.jsx";
+import { AiAnalystPanel } from "../components/chat/AiAnalystPanel.jsx";
+
+// Document type icons and colors
+const DOC_TYPE_STYLES = {
+  conference_call_transcript: { icon: MessageSquare, color: "text-emerald-400", bg: "bg-emerald-900/30", border: "border-emerald-800/40", label: "Conference Call" },
+  annual_report: { icon: BookOpen, color: "text-amber-400", bg: "bg-amber-900/30", border: "border-amber-800/40", label: "Annual Report" },
+  quarterly_results: { icon: BarChart3, color: "text-cyan-400", bg: "bg-cyan-900/30", border: "border-cyan-800/40", label: "Quarterly Results" },
+  investor_presentation: { icon: FileText, color: "text-purple-400", bg: "bg-purple-900/30", border: "border-purple-800/40", label: "Investor Presentation" },
+  other: { icon: FileText, color: "text-slate-400", bg: "bg-slate-800/30", border: "border-slate-700/40", label: "Document" },
+};
+
+/**
+ * DocumentsPanel — Shows a live list of ingested documents for the company.
+ */
+const DocumentsPanel = ({ companyId, ticker }) => {
+  const [docs, setDocs] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const ragUrl = import.meta.env.VITE_RAG_URL || "http://localhost:8000";
+
+  useEffect(() => {
+    if (!companyId) return;
+    const fetchDocs = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${ragUrl}/documents/${companyId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDocs(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch documents:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDocs();
+  }, [companyId]);
+
+  if (loading) {
+    return (
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-8 text-center shadow-xl backdrop-blur-md">
+        <div className="animate-spin h-6 w-6 border-2 border-terminal-cyan border-t-transparent rounded-full mx-auto mb-3"></div>
+        <p className="text-xs text-slate-400">Loading documents...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <FileText className="h-5 w-5 text-terminal-cyan" />
+          <h3 className="text-base font-bold text-slate-100">Ingested Documents</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-slate-500">
+            {docs?.total_documents || 0} document{docs?.total_documents !== 1 ? "s" : ""} indexed
+          </span>
+          {docs && (
+            <span
+              className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+                docs.concall_status === "available"
+                  ? "bg-emerald-900/40 text-emerald-400 border border-emerald-800/50"
+                  : "bg-amber-900/40 text-amber-400 border border-amber-800/50"
+              }`}
+            >
+              {docs.concall_status === "available" ? "Concalls Available" : "No Concalls Available"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Document List */}
+      {docs?.documents?.length > 0 ? (
+        <div className="space-y-2.5">
+          {docs.documents.map((doc, i) => {
+            const style = DOC_TYPE_STYLES[doc.type] || DOC_TYPE_STYLES.other;
+            const Icon = style.icon;
+            return (
+              <div
+                key={doc.id || i}
+                className={`flex items-center justify-between px-4 py-3.5 rounded-xl ${style.bg} border ${style.border} transition-all hover:border-slate-500/80 shadow-sm`}
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className={`p-2 rounded-lg bg-slate-900/60 border border-slate-700/50`}>
+                    <Icon className={`h-4 w-4 ${style.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">{doc.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[11px] font-mono text-slate-400">{style.label}</span>
+                      <span className="text-[10px] text-slate-600">|</span>
+                      <span className="text-[11px] font-mono text-cyan-400/90">FY{String(doc.fiscal_year).slice(2)}</span>
+                      {doc.fiscal_quarter && (
+                        <>
+                          <span className="text-[10px] text-slate-600">|</span>
+                          <span className="text-[11px] font-mono text-amber-400/90">{doc.fiscal_quarter}</span>
+                        </>
+                      )}
+                      {doc.page_count && (
+                        <>
+                          <span className="text-[10px] text-slate-600">|</span>
+                          <span className="text-[11px] font-mono text-slate-400">{doc.page_count} pages</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[11px] font-mono text-slate-400 bg-slate-800/90 border border-slate-700/60 px-2.5 py-1 rounded-lg">
+                    {doc.chunks} chunks
+                  </span>
+                  {doc.has_pdf && (
+                    <a
+                      href={`${ragUrl}/documents/${doc.id}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                        bg-gradient-to-r from-cyan-600/90 to-blue-600/90 hover:from-cyan-500 hover:to-blue-500
+                        text-white shadow-md shadow-cyan-950/50 border border-cyan-400/30 hover:border-cyan-300
+                        transition-all duration-200 group cursor-pointer"
+                      title="Open full PDF in browser viewer"
+                    >
+                      <Eye className="h-3.5 w-3.5 group-hover:scale-110 transition-transform text-cyan-200" />
+                      <span>Open PDF</span>
+                      <ExternalLink className="h-3 w-3 opacity-70 group-hover:opacity-100" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <FileText className="h-8 w-8 text-slate-600 mx-auto mb-3" />
+          <p className="text-sm text-slate-400 mb-1">No documents ingested yet</p>
+          <p className="text-xs text-slate-500">
+            Run the ingestion pipeline to index documents: <code className="text-cyan-400">python -m app.ingestion.pipeline</code>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export const CompanyPage = () => {
   const { ticker } = useParams();
   const [company, setCompany] = useState(null);
   const [financials, setFinancials] = useState(null);
+  const [annualFinancials, setAnnualFinancials] = useState(null);
   const [period, setPeriod] = useState("annual");
   const [activeTab, setActiveTab] = useState("financials");
   const [loadingCompany, setLoadingCompany] = useState(true);
@@ -46,7 +199,23 @@ export const CompanyPage = () => {
     fetchCompany();
   }, [ticker]);
 
-  // 2. Fetch Financial Data for Company
+  // 2. Fetch Annual Financials specifically for Header Quick Metrics
+  useEffect(() => {
+    if (!ticker) return;
+    const fetchAnnual = async () => {
+      try {
+        const res = await api.get(`/companies/${ticker}/financials?period=annual`);
+        if (res.data && res.data.success) {
+          setAnnualFinancials(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch annual financials:", err);
+      }
+    };
+    fetchAnnual();
+  }, [ticker]);
+
+  // 3. Fetch Tab Financial Data for Company (Annual or Quarterly)
   useEffect(() => {
     if (!ticker) return;
 
@@ -95,7 +264,7 @@ export const CompanyPage = () => {
   }
 
   // Get the most recent annual period for key metric stat badges
-  const latestAnnual = financials?.periods?.[financials.periods.length - 1];
+  const latestAnnual = annualFinancials?.periods?.[annualFinancials.periods.length - 1] || financials?.periods?.[financials.periods.length - 1];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-20 space-y-6">
@@ -112,6 +281,10 @@ export const CompanyPage = () => {
               </span>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
                 {company.industry}
+              </span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-mono flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Document Extracted Data
               </span>
             </div>
 
@@ -204,8 +377,9 @@ export const CompanyPage = () => {
           </button>
 
           <button
+            id="tab-documents"
             onClick={() => setActiveTab("documents")}
-            className={`pb-3 flex items-center space-x-2 border-b-2 transition-all ${
+            className={`pb-3 flex items-center space-x-2 border-b-2 transition-all cursor-pointer ${
               activeTab === "documents"
                 ? "border-terminal-cyan text-terminal-cyan font-semibold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -213,14 +387,15 @@ export const CompanyPage = () => {
           >
             <FileText className="h-4 w-4" />
             <span>Filings & Transcripts</span>
-            <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono">
-              Sprint 5
+            <span className="text-[9px] bg-emerald-900/40 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono">
+              Live
             </span>
           </button>
 
           <button
+            id="tab-ai-analyst"
             onClick={() => setActiveTab("ai-analyst")}
-            className={`pb-3 flex items-center space-x-2 border-b-2 transition-all ${
+            className={`pb-3 flex items-center space-x-2 border-b-2 transition-all cursor-pointer ${
               activeTab === "ai-analyst"
                 ? "border-terminal-cyan text-terminal-cyan font-semibold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -228,8 +403,8 @@ export const CompanyPage = () => {
           >
             <Bot className="h-4 w-4" />
             <span>AI Analyst (RAG)</span>
-            <span className="text-[9px] bg-cyan-900/40 text-cyan-300 border border-cyan-800 px-1.5 py-0.2 rounded font-mono">
-              Sprint 6
+            <span className="text-[9px] bg-emerald-900/40 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono">
+              Live
             </span>
           </button>
         </div>
@@ -286,36 +461,14 @@ export const CompanyPage = () => {
         </div>
       )}
 
-      {/* TAB CONTENT: DOCUMENTS PREVIEW (SPRINT 5 TEASER) */}
+      {/* TAB CONTENT: DOCUMENTS & FILINGS */}
       {activeTab === "documents" && (
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-8 text-center shadow-xl backdrop-blur-md">
-          <div className="h-12 w-12 rounded-xl bg-slate-800 flex items-center justify-center text-terminal-cyan mx-auto mb-4 border border-slate-700">
-            <FileText className="h-6 w-6" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-100 mb-2">Company Documents & Transcripts</h3>
-          <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-            In <strong>Sprint 5</strong>, we will integrate Python-based automated PDF extraction and earnings call transcript parsing with speaker segmentation.
-          </p>
-          <div className="inline-block bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-xs font-mono text-cyan-400">
-            Upcoming: ITC Limited Annual Reports FY21-FY24 & Q4 Conference Call Transcripts
-          </div>
-        </div>
+        <DocumentsPanel companyId={company.id} ticker={company.ticker} />
       )}
 
       {/* TAB CONTENT: AI ANALYST PREVIEW (SPRINT 6 TEASER) */}
       {activeTab === "ai-analyst" && (
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-8 text-center shadow-xl backdrop-blur-md">
-          <div className="h-12 w-12 rounded-xl bg-slate-800 flex items-center justify-center text-cyan-400 mx-auto mb-4 border border-slate-700">
-            <Bot className="h-6 w-6" />
-          </div>
-          <h3 className="text-lg font-bold text-slate-100 mb-2">AI Equity Research Analyst</h3>
-          <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-            In <strong>Sprint 6</strong>, ask questions like <em>"Why did ITC's operating margins compress in FY24?"</em> and get grounded answers with document citations.
-          </p>
-          <div className="inline-block bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-xs font-mono text-emerald-400">
-            Upcoming: Vector Search RAG + Attribution Drawer + Confidence Badges
-          </div>
-        </div>
+        <AiAnalystPanel company={company} />
       )}
     </div>
   );
