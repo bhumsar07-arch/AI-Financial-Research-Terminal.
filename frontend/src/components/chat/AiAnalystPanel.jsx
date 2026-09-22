@@ -246,6 +246,11 @@ const ChatBubble = ({ message, onCitationClick }) => {
     message.meta?.llmProvider === "gemini" ||
     message.meta?.engineDetails?.provider === "gemini";
 
+  const geminiError = message.meta?.engineDetails?.gemini_error || null;
+  const engineName = message.meta?.engineDetails?.name ||
+    message.meta?.engine_details?.name ||
+    (isGemini ? "Google Gemini AI" : "Local Extractive Engine");
+
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {/* Avatar */}
@@ -264,12 +269,12 @@ const ChatBubble = ({ message, onCitationClick }) => {
       <div className={`max-w-[85%] space-y-2 ${isUser ? "items-end" : "items-start"}`}>
         {/* Engine Badge for Assistant Messages */}
         {!isUser && (
-          <div className="flex items-center gap-2 px-1">
+          <div className="flex flex-wrap items-center gap-2 px-1">
             {isGemini ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <Sparkles className="h-2.5 w-2.5 text-emerald-400" />
-                {message.meta?.engineDetails?.name || message.meta?.engine_details?.name || "Google Gemini AI"}
+                {engineName}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-950/80 text-amber-300 border border-amber-700/50 shadow-sm">
@@ -281,6 +286,13 @@ const ChatBubble = ({ message, onCitationClick }) => {
             {message.meta?.sourceCount > 0 && (
               <span className="text-[10px] font-mono text-slate-500">
                 • {message.meta.sourceCount} grounded passage{message.meta.sourceCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            {/* Show Gemini fallback warning on message if Gemini errored */}
+            {!isGemini && geminiError && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono bg-rose-950/60 text-rose-300 border border-rose-800/50" title={`Gemini error: ${geminiError}`}>
+                <AlertTriangle className="h-2.5 w-2.5" />
+                Gemini unavailable
               </span>
             )}
           </div>
@@ -667,19 +679,31 @@ export const AiAnalystPanel = ({ company }) => {
       });
 
       if (res.data?.success) {
+        const { engineDetails, llmProvider } = res.data.data;
         const assistantMsg = {
           role: "assistant",
           content: res.data.data.answer,
           citations: res.data.data.citations || [],
           meta: {
             sourceCount: res.data.data.sourceCount,
-            llmProvider: res.data.data.llmProvider,
-            engineDetails: res.data.data.engineDetails,
+            llmProvider,
+            engineDetails,
             concallAvailable: res.data.data.concallAvailable,
           },
         };
         setMessages((prev) => [...prev, assistantMsg]);
-        fetchLlmStatus();
+        // Sync header LLM badge from actual query response (not just the mount-time poll)
+        if (engineDetails) {
+          setLlmStatus((prev) => ({
+            ...prev,
+            is_gemini_active: llmProvider === "gemini",
+            model: engineDetails.model || prev?.model,
+            engine_name: engineDetails.name || prev?.engine_name,
+            active_provider: llmProvider,
+            // Surface gemini_error so warning banner can render
+            gemini_error: engineDetails.gemini_error || null,
+          }));
+        }
       } else {
         setMessages((prev) => [
           ...prev,
@@ -693,12 +717,19 @@ export const AiAnalystPanel = ({ company }) => {
       }
     } catch (err) {
       console.error("Chat error:", err);
+      const isAuth = err.response?.status === 401;
+      const errorMsg = isAuth
+        ? "Authentication required: Please sign in or register to chat with the AI Research Analyst."
+        : err.response?.data?.error?.message ||
+          err.response?.data?.error ||
+          err.response?.data?.message ||
+          "Unable to connect to the AI analysis service. Please ensure both the backend server (port 5000) and RAG service (port 8000) are running.";
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content:
-            "Unable to connect to the AI analysis service. Please ensure both the backend server (port 5000) and RAG service (port 8000) are running.",
+          content: errorMsg,
           citations: [],
         },
       ]);
@@ -777,6 +808,16 @@ export const AiAnalystPanel = ({ company }) => {
           </div>
         </div>
       </div>
+
+      {/* Gemini Fallback Warning Banner */}
+      {llmStatus?.gemini_error && (
+        <div className="flex items-center gap-2.5 px-5 py-2 bg-rose-950/40 border-b border-rose-800/40 text-[11px] font-mono text-rose-300">
+          <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+          <span>
+            <strong>Gemini Unavailable:</strong> {llmStatus.gemini_error.length > 120 ? llmStatus.gemini_error.slice(0, 120) + "..." : llmStatus.gemini_error} — Running on Local Extractive Engine.
+          </span>
+        </div>
+      )}
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin">

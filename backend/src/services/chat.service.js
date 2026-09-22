@@ -103,6 +103,7 @@ export const chatService = {
       return {
         userMessage: userMsg,
         assistantMessage: errorMsg,
+        answer: errorMsg.content,
         error: err.message,
       };
     }

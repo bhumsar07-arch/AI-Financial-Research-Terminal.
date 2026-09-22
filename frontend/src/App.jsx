@@ -2,7 +2,8 @@ import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { Header } from "./components/layout/Header.jsx";
-import { StatusBar } from "./components/layout/StatusBar.jsx";
+import { Footer } from "./components/layout/Footer.jsx";
+import { ProtectedRoute } from "./components/layout/ProtectedRoute.jsx";
 import { HomePage } from "./pages/HomePage.jsx";
 import { CompanyPage } from "./pages/CompanyPage.jsx";
 import { LoginPage } from "./pages/LoginPage.jsx";
@@ -16,13 +17,23 @@ export function App() {
           <Header />
           <main className="flex-1">
             <Routes>
+              {/* Public Routes */}
               <Route path="/" element={<HomePage />} />
-              <Route path="/company/:ticker" element={<CompanyPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+
+              {/* Protected Routes — require authentication */}
+              <Route
+                path="/company/:ticker"
+                element={
+                  <ProtectedRoute>
+                    <CompanyPage />
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
           </main>
-          <StatusBar />
+          <Footer />
         </div>
       </AuthProvider>
     </BrowserRouter>

@@ -1,81 +1,116 @@
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Terminal, Shield, LogOut, User, Activity } from "lucide-react";
+import React, { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Terminal, LogOut, User, BarChart2, ChevronDown, Building2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { SearchBar } from "../company/SearchBar.jsx";
 
 export const Header = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const handleLogout = async () => {
+    setUserMenuOpen(false);
     await logout();
-    navigate("/login");
+    navigate("/");
   };
 
-  return (
-    <header className="sticky top-0 z-40 w-full bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80">
-      {/* Ticker Tape */}
-      <div className="bg-slate-900/60 border-b border-slate-800/40 px-4 py-1 flex items-center justify-between text-xs font-mono text-slate-400">
-        <div className="flex items-center space-x-6 overflow-x-auto whitespace-nowrap">
-          <span className="flex items-center text-emerald-400 font-semibold">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block mr-1.5 animate-pulse"></span>
-            LIVE TERMINAL
-          </span>
-          <span>NSE: <strong className="text-slate-200">ITC</strong> ₹435.50 <strong className="text-emerald-400">+1.42%</strong></span>
-          <span>INDEX: <strong className="text-slate-200">NIFTY 50</strong> 25,415.80 <strong className="text-emerald-400">+0.38%</strong></span>
-          <span>SECTOR: <strong className="text-slate-200">FMCG</strong> 62,810.10 <strong className="text-emerald-400">+0.85%</strong></span>
-          <span>STATUS: <span className="text-cyan-400">API CONNECTED (PORT 5000)</span></span>
-        </div>
-        <div className="hidden sm:flex items-center space-x-2 text-slate-500">
-          <span>UTC {new Date().toISOString().substring(11, 19)}</span>
-        </div>
-      </div>
+  const isCompanyPage = location.pathname.startsWith("/company/");
 
-      {/* Main Header Bar */}
+  return (
+    <header className="sticky top-0 z-40 w-full bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+
         {/* Logo / Brand */}
-        <Link to="/" className="flex items-center space-x-3 group">
-          <div className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-700/80 flex items-center justify-center text-terminal-cyan shadow-sm group-hover:border-terminal-cyan/80 transition-colors">
+        <Link to="/" className="flex items-center space-x-2.5 group shrink-0">
+          <div className="h-9 w-9 rounded-lg bg-slate-900 border border-slate-700/80 flex items-center justify-center text-terminal-cyan shadow-sm group-hover:border-terminal-cyan/70 transition-all group-hover:shadow-terminal-cyan/10 group-hover:shadow-md">
             <Terminal className="h-5 w-5" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-bold tracking-wider text-slate-100 uppercase">Financial Terminal</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+                Financial Terminal
+              </span>
+              <span className="hidden sm:inline text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-terminal-cyan/10 text-terminal-cyan border border-terminal-cyan/25">
                 PRO
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 font-mono">Institutional Research & RAG</div>
+            <div className="text-[10px] text-slate-500 font-mono hidden sm:block">
+              Institutional Research &amp; AI Analysis
+            </div>
           </div>
         </Link>
 
-        {/* Global Search Bar */}
-        <div className="flex-1 max-w-md hidden md:block">
-          <SearchBar />
-        </div>
+        {/* Center: Search (only for authenticated users on non-homepage) */}
+        {user && (
+          <div className="flex-1 max-w-md hidden md:block">
+            <SearchBar />
+          </div>
+        )}
 
-        {/* User Account / Navigation */}
-        <div className="flex items-center space-x-3">
+        {/* Right: Nav Links + User */}
+        <div className="flex items-center gap-3">
           {user ? (
-            <div className="flex items-center space-x-3">
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-medium text-slate-200">{user.name || "Analyst"}</span>
-                <span className="text-[10px] text-slate-400 font-mono">{user.email}</span>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
-                <User className="h-4 w-4" />
-              </div>
-              <button
-                onClick={handleLogout}
-                title="Log out"
-                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-lg transition-colors border border-transparent hover:border-slate-800"
+            <>
+              {/* Dashboard Quick Link */}
+              <Link
+                to="/"
+                className={`hidden sm:flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                  location.pathname === "/"
+                    ? "text-terminal-cyan bg-terminal-cyan/10 border border-terminal-cyan/25"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                }`}
               >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
+                <Building2 className="h-3.5 w-3.5" />
+                Dashboard
+              </Link>
+
+              {/* User Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/60 transition-all"
+                  id="btn-user-menu"
+                >
+                  <div className="h-6 w-6 rounded-full bg-gradient-to-br from-terminal-cyan to-blue-600 flex items-center justify-center text-white shadow-sm">
+                    <User className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="hidden sm:block text-xs font-medium text-slate-200 max-w-[100px] truncate">
+                    {user.name || "Analyst"}
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {userMenuOpen && (
+                  <>
+                    {/* Backdrop */}
+                    <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-20 overflow-hidden">
+                      <div className="px-3 py-3 border-b border-slate-800">
+                        <p className="text-xs font-semibold text-slate-200 truncate">{user.name || "Analyst"}</p>
+                        <p className="text-[10px] font-mono text-slate-400 truncate mt-0.5">{user.email}</p>
+                        <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-terminal-cyan/10 text-terminal-cyan border border-terminal-cyan/25 uppercase">
+                          {user.role}
+                        </span>
+                      </div>
+                      <div className="p-1">
+                        <button
+                          onClick={handleLogout}
+                          id="btn-logout"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          Sign Out
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           ) : (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2">
               <Link
                 to="/login"
                 className="text-xs font-medium px-3.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors"
@@ -84,19 +119,21 @@ export const Header = () => {
               </Link>
               <Link
                 to="/register"
-                className="text-xs font-medium px-3.5 py-1.5 rounded-lg bg-terminal-cyan/15 text-terminal-cyan hover:bg-terminal-cyan/25 border border-terminal-cyan/30 transition-colors"
+                className="text-xs font-medium px-3.5 py-1.5 rounded-lg bg-terminal-cyan hover:bg-cyan-400 text-slate-950 font-semibold transition-all shadow-md shadow-terminal-cyan/20"
               >
-                Register
+                Get Started
               </Link>
             </div>
           )}
         </div>
       </div>
 
-      {/* Mobile Search Bar View */}
-      <div className="px-4 pb-3 md:hidden">
-        <SearchBar />
-      </div>
+      {/* Mobile Search (authenticated only) */}
+      {user && (
+        <div className="px-4 pb-3 md:hidden border-t border-slate-800/40 pt-2.5">
+          <SearchBar />
+        </div>
+      )}
     </header>
   );
 };
