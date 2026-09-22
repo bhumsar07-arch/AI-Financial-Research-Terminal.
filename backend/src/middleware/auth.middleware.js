@@ -8,11 +8,13 @@ export const authenticateToken = async (req, res, next) => {
 
     // Check if Authorization header is present and begins with "Bearer "
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      // In development mode, provide seamless fallback to default user
-      const devUser = await getUserById(1);
-      if (devUser) {
-        req.user = devUser;
-        return next();
+      // In local development mode only, provide seamless fallback to default user if configured
+      if (process.env.NODE_ENV === "development" && process.env.ALLOW_DEV_AUTH_BYPASS === "true") {
+        const devUser = await getUserById(1);
+        if (devUser) {
+          req.user = devUser;
+          return next();
+        }
       }
 
       return errorResponse(
