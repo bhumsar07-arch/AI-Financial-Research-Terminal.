@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
   Building2,
   Globe,
@@ -170,11 +170,51 @@ const DocumentsPanel = ({ companyId, ticker }) => {
 
 export const CompanyPage = () => {
   const { ticker } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get("tab");
+  const validTabs = ["financials", "charts", "overview", "documents", "ai-analyst"];
+
+  // Initialize activeTab from URL search param or sessionStorage, defaulting to "financials"
+  const [activeTab, setActiveTabState] = useState(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl)) {
+      return tabFromUrl;
+    }
+    try {
+      const savedTab = sessionStorage.getItem(`company_tab_${ticker}`);
+      if (savedTab && validTabs.includes(savedTab)) {
+        return savedTab;
+      }
+    } catch (e) {}
+    return "financials";
+  });
+
+  // Sync activeTab changes to both URL and sessionStorage
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    try {
+      sessionStorage.setItem(`company_tab_${ticker}`, tab);
+    } catch (e) {}
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
+  // If user navigates via browser back/forward, sync URL param to activeTab state
+  useEffect(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl) && tabFromUrl !== activeTab) {
+      setActiveTabState(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
   const [company, setCompany] = useState(null);
   const [financials, setFinancials] = useState(null);
   const [annualFinancials, setAnnualFinancials] = useState(null);
   const [period, setPeriod] = useState("annual");
-  const [activeTab, setActiveTab] = useState("financials");
   const [loadingCompany, setLoadingCompany] = useState(true);
   const [loadingFinancials, setLoadingFinancials] = useState(true);
   const [error, setError] = useState(null);

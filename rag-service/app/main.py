@@ -6,15 +6,16 @@ from typing import Optional
 from pathlib import Path
 import re
 from app.config.settings import settings
-from app.database.connection import check_db_health, get_db_connection
+from app.database.connection import check_db_health, get_db_connection, run_pgvector_migration
 from app.ingestion.pipeline import ingest_itc_transcript, ingest_uploaded_documents
 from app.retrieval.vector_search import search_chunks, get_document_context
 from app.generation.generator import generate_answer, check_llm_status, set_gemini_key
+from app.embeddings.embedder import embedder
 
 app = FastAPI(
     title=settings.app_name,
     description="Dedicated AI, Transcript Processing, and Vector RAG Microservice for Financial Research",
-    version="2.0.0",
+    version="3.0.0",
 )
 
 # Allow Cross-Origin Resource Sharing
@@ -25,6 +26,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Run pgvector migration on startup (idempotent — safe to run every time)."""
+    print("[Startup] Running pgvector migration...")
+    result = run_pgvector_migration()
+    if result.get("pgvector_extension"):
+        print(f"[Startup] pgvector ready. Column added: {result['column_added']}, Index: {result['index_created']}, Backfilled: {result['backfill_count']} rows")
+    else:
+        print(f"[Startup] pgvector not available — using Python brute-force fallback. ({result.get('error', '')})")
+    
+    # Pre-load the embedding model (downloads on first use)
+    print(f"[Startup] Embedding model: {embedder.model_name} (semantic={embedder.is_semantic})")
 
 
 # ---------------------------------------------------------------------------
@@ -58,11 +73,15 @@ def health_check():
     return {
         "status": "ok" if db_alive else "degraded",
         "service": "rag-service",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "database": {
             "connected": db_alive,
         },
-        "embedding_dimension": settings.embedding_dimension,
+        "embedding": {
+            "model": embedder.model_name,
+            "is_semantic": embedder.is_semantic,
+            "dimension": settings.embedding_dimension,
+        },
     }
 
 

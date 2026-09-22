@@ -6,6 +6,9 @@ Supports two modes:
   2. Local extractive synthesis — runs 100% offline, no API keys needed.
      Extracts and ranks the most relevant evidence passages and composes
      a structured answer with speaker attributions and citations.
+
+Also handles casual conversational inputs (greetings, small talk) gracefully
+without triggering the full RAG pipeline.
 """
 
 import os
@@ -140,7 +143,13 @@ def _generate_with_gemini(query: str, evidence: str) -> tuple[str, str]:
 ## YOUR ANALYSIS
 Provide a thorough, evidence-grounded answer:"""
 
-    candidate_models = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]
+    candidate_models = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-flash-latest",
+        "gemini-3.8-flash",
+    ]
     last_exc = None
 
     for model_name in candidate_models:
@@ -267,6 +276,100 @@ def _generate_local_synthesis(query: str, chunks: List[Dict[str, Any]]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Casual query detection
+# ---------------------------------------------------------------------------
+
+CASUAL_PATTERNS = [
+    r"^(hi|hello|hey|hii|hiiii|yo|sup|hola)\W*$",
+    r"^(good\s*(morning|afternoon|evening|night|day))\W*$",
+    r"^(how\s*are\s*you|how\s*r\s*u|how\s*you\s*doing|u\s*ok|you\s*okay)\W*$",
+    r"^(thanks|thank\s*you|thx|ty|cheers|great|awesome|nice|cool|ok|okay|alright)\W*$",
+    r"^(what('s|\s+is)\s+your\s+name|who\s+are\s+you)\W*$",
+    r"^(bye|goodbye|see\s*you|cya|later)\W*$",
+    r"^(help|what\s+can\s+you\s+do|what\s+do\s+you\s+do)\W*$",
+]
+
+CASUAL_RESPONSES = {
+    "greeting": [
+        "Hey! I'm your AI financial analyst. Ask me anything about the company — earnings, strategy, margins, what management said in the last earnings call, all of it.",
+        "Hello! Ready to dig into some financials. What would you like to know?",
+        "Hi! What financial question can I help you with today?",
+    ],
+    "how_are_you": [
+        "Doing great, thanks for asking! Now — what financial question can I help you crack?",
+        "All good! Ready to analyze some numbers. What do you want to know?",
+    ],
+    "thanks": [
+        "Happy to help! Anything else you'd like to explore?",
+        "Of course! Feel free to ask another question anytime.",
+        "Glad that was useful! What else can I dig into for you?",
+    ],
+    "who_are_you": [
+        "I'm your AI Financial Research Analyst — I read annual reports, earnings call transcripts, and investor presentations so you don't have to. Ask me anything about the company.",
+    ],
+    "help": [
+        "I can help you with:\n- **Earnings analysis** — revenue, EBITDA, margins, profit trends\n- **Management commentary** — what the CEO/CFO said in earnings calls\n- **Strategy & outlook** — growth plans, capital allocation, guidance\n- **Document deep dives** — any specific section of an annual report or filing\n\nJust ask your question naturally!",
+    ],
+    "bye": [
+        "See you! Come back whenever you need to dig into more financials.",
+        "Goodbye! Happy analyzing!",
+    ],
+    "default": [
+        "Hey! Go ahead and ask me a financial question — I'll analyze the company's documents and give you a grounded, cited answer.",
+    ],
+}
+
+import random
+
+def is_casual_query(query: str) -> bool:
+    """Returns True if the query is a greeting, small talk, or non-financial casual message."""
+    q = query.strip().lower()
+    # Very short queries that aren't numbers or tickers
+    if len(q.split()) <= 2 and not any(char.isdigit() for char in q):
+        for pattern in CASUAL_PATTERNS:
+            if re.match(pattern, q, re.IGNORECASE):
+                return True
+    return False
+
+
+def handle_casual_query(query: str) -> Dict[str, Any]:
+    """Returns a natural conversational response without triggering RAG."""
+    q = query.strip().lower()
+
+    if re.match(CASUAL_PATTERNS[0], q, re.IGNORECASE):  # greeting
+        responses = CASUAL_RESPONSES["greeting"]
+    elif re.match(CASUAL_PATTERNS[2], q, re.IGNORECASE):  # how are you
+        responses = CASUAL_RESPONSES["how_are_you"]
+    elif re.match(CASUAL_PATTERNS[3], q, re.IGNORECASE):  # thanks
+        responses = CASUAL_RESPONSES["thanks"]
+    elif re.match(CASUAL_PATTERNS[4], q, re.IGNORECASE):  # who are you
+        responses = CASUAL_RESPONSES["who_are_you"]
+    elif re.match(CASUAL_PATTERNS[7], q, re.IGNORECASE):  # help
+        responses = CASUAL_RESPONSES["help"]
+    elif re.match(CASUAL_PATTERNS[6], q, re.IGNORECASE):  # bye
+        responses = CASUAL_RESPONSES["bye"]
+    else:
+        responses = CASUAL_RESPONSES["default"]
+
+    return {
+        "answer": random.choice(responses),
+        "citations": [],
+        "source_count": 0,
+        "llm_provider": "conversational",
+        "engine_details": {
+            "provider": "conversational",
+            "name": "Conversational Agent",
+            "badge": "Chat",
+            "mode": "conversational",
+            "model": "rule-based",
+            "gemini_error": None,
+        },
+        "concall_available": False,
+        "is_casual": True,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -286,6 +389,10 @@ def generate_answer(
     Returns:
         Dict with keys: answer, citations, source_count, llm_provider, concall_available.
     """
+    # Handle casual conversational inputs gracefully
+    if is_casual_query(query):
+        return handle_casual_query(query)
+
     if not retrieved_chunks:
         has_concall = False
         return {
@@ -316,7 +423,7 @@ def generate_answer(
     gemini_key = get_configured_gemini_key()
     provider = use_llm or os.getenv("LLM_PROVIDER", "auto")
 
-    gemini_model = "gemini-3.6-flash"
+    gemini_model = "gemini-3.5-flash-lite"
     if provider == "gemini" or (provider == "auto" and gemini_key):
         if HAS_GEMINI and gemini_key:
             try:
@@ -351,6 +458,7 @@ def generate_answer(
         "badge": "Gemini AI" if llm_provider == "gemini" else "Local Extractive",
         "mode": "cloud_llm" if llm_provider == "gemini" else "offline_extractive",
         "model": gemini_model if llm_provider == "gemini" else "extractive-ranker-v1",
+        "embedding_model": "all-MiniLM-L6-v2 (semantic)",
         "gemini_error": gemini_error,
     }
 
@@ -401,12 +509,18 @@ def check_llm_status(test_ping: bool = False) -> Dict[str, Any]:
         }
 
     ping_result = None
-    active_model_name = "gemini-3.6-flash"
+    active_model_name = "gemini-3.5-flash-lite"
 
     if test_ping:
         try:
             genai.configure(api_key=gemini_key)
-            candidate_models = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+            candidate_models = [
+                "gemini-3.5-flash-lite",
+                "gemini-3.5-flash",
+                "gemini-3.6-flash",
+                "gemini-flash-latest",
+                "gemini-3.8-flash",
+            ]
             last_err = None
             ping_success = False
 
@@ -448,6 +562,7 @@ def check_llm_status(test_ping: bool = False) -> Dict[str, Any]:
         "api_key_configured": True,
         "masked_key": masked,
         "ping_test": ping_result,
+        "embedding_model": "all-MiniLM-L6-v2 (semantic)",
         "message": f"Google Gemini ({active_model_name}) is configured and verified active.",
     }
 
@@ -464,9 +579,15 @@ def set_gemini_key(api_key: str) -> Dict[str, Any]:
         raise ValueError("google-generativeai package is not installed.")
 
     # Validate against Gemini API across candidate models
-    candidate_models = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+    candidate_models = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-flash-latest",
+        "gemini-3.8-flash",
+    ]
     verified = False
-    active_model_name = "gemini-3.6-flash"
+    active_model_name = "gemini-3.5-flash-lite"
     last_err = None
 
     for m_name in candidate_models:

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Terminal, Lock, Mail, User, ArrowRight, AlertCircle, Loader2, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -18,6 +18,11 @@ export const RegisterPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const from = location.state?.from
+    ? `${location.state.from.pathname}${location.state.from.search || ""}`
+    : "/";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,7 +41,7 @@ export const RegisterPage = () => {
     setSubmitting(true);
     try {
       await register(name, email, password);
-      navigate("/", { replace: true });
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.response?.data?.error?.message || err.message || "Registration failed");
     } finally {

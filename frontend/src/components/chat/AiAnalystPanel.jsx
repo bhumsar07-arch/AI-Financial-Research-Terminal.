@@ -19,6 +19,9 @@ import {
   Settings,
   CheckCircle2,
   Key,
+  ArrowLeft,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import api from "../../services/api.js";
 
@@ -242,14 +245,21 @@ const ChatBubble = ({ message, onCitationClick }) => {
       : message.citations
     : [];
 
+  const isConversational =
+    message.meta?.llmProvider === "conversational" ||
+    message.meta?.engineDetails?.provider === "conversational";
+
   const isGemini =
     message.meta?.llmProvider === "gemini" ||
-    message.meta?.engineDetails?.provider === "gemini";
+    message.meta?.engineDetails?.provider === "gemini" ||
+    isConversational;
 
   const geminiError = message.meta?.engineDetails?.gemini_error || null;
-  const engineName = message.meta?.engineDetails?.name ||
-    message.meta?.engine_details?.name ||
-    (isGemini ? "Google Gemini AI" : "Local Extractive Engine");
+  const engineName = isConversational
+    ? "AI Research Assistant"
+    : message.meta?.engineDetails?.name ||
+      message.meta?.engine_details?.name ||
+      (isGemini ? "Google Gemini AI" : "Local Extractive Engine");
 
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
@@ -373,6 +383,15 @@ const LlmSettingsModal = ({ isOpen, onClose, llmStatus, onRefreshStatus }) => {
   const [saveMessage, setSaveMessage] = useState(null);
   const [saveError, setSaveError] = useState(null);
 
+  // Close on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   if (!isOpen) return null;
 
   const handleTestConnection = async () => {
@@ -422,184 +441,217 @@ const LlmSettingsModal = ({ isOpen, onClose, llmStatus, onRefreshStatus }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md overflow-y-auto"
+      onClick={onClose}
+    >
       <div
-        className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-6 space-y-6 text-slate-100"
+        className="relative w-full max-w-xl max-h-[86vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col text-slate-100 my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-600/30 to-blue-600/30 border border-cyan-500/40">
-              <Sparkles className="h-5 w-5 text-cyan-400" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-100">LLM Engine & Model Diagnostics</h3>
-              <p className="text-xs text-slate-400 font-mono">Verify Gemini connection or manage local fallback</p>
+        {/* Sticky Header — never scrolls away */}
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm px-5 py-3.5 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              id="btn-back-modal"
+              onClick={onClose}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700
+                transition-colors cursor-pointer shadow-sm group"
+              title="Return to Research Terminal (Esc)"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
+              <span>Back to Terminal</span>
+            </button>
+            <div className="hidden sm:block h-4 w-px bg-slate-800" />
+            <div className="hidden sm:flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-terminal-cyan" />
+              <h3 className="text-sm font-bold text-slate-100">LLM Engine Settings</h3>
             </div>
           </div>
-          <button
-            id="btn-close-modal"
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-          >
-            <X className="h-5 w-5" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-slate-500 hidden md:inline">ESC to close</span>
+            <button
+              id="btn-close-modal"
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              title="Close modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Current Active Engine Status Card */}
-        <div
-          className={`p-4 rounded-xl border ${
-            llmStatus?.is_gemini_active
-              ? "bg-emerald-950/30 border-emerald-700/50"
-              : "bg-amber-950/30 border-amber-700/50"
-          } space-y-3`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${llmStatus?.is_gemini_active ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
-              <span className="text-xs font-mono uppercase tracking-wider font-bold text-slate-300">
-                Active Generation Mode
+        {/* Scrollable Content Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+          {/* Current Active Engine Status Card */}
+          <div
+            className={`p-4 rounded-xl border ${
+              llmStatus?.is_gemini_active
+                ? "bg-emerald-950/30 border-emerald-700/50"
+                : "bg-amber-950/30 border-amber-700/50"
+            } space-y-3`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${llmStatus?.is_gemini_active ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+                <span className="text-xs font-mono uppercase tracking-wider font-bold text-slate-300">
+                  Active Generation Mode
+                </span>
+              </div>
+              <span
+                className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  llmStatus?.is_gemini_active
+                    ? "bg-emerald-900/60 text-emerald-300 border border-emerald-600/50"
+                    : "bg-amber-900/60 text-amber-300 border border-amber-600/50"
+                }`}
+              >
+                {llmStatus?.is_gemini_active ? "Cloud LLM Active" : "Offline Extractive Active"}
               </span>
             </div>
-            <span
-              className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold ${
-                llmStatus?.is_gemini_active
-                  ? "bg-emerald-900/60 text-emerald-300 border border-emerald-600/50"
-                  : "bg-amber-900/60 text-amber-300 border border-amber-600/50"
-              }`}
-            >
-              {llmStatus?.is_gemini_active ? "Cloud LLM Active" : "Offline Extractive Active"}
-            </span>
+
+            <div>
+              <h4 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                {llmStatus?.is_gemini_active ? (
+                  <>
+                    <Sparkles className="h-5 w-5 text-emerald-400" />
+                    {llmStatus?.engine_name || "Google Gemini AI"}
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="h-5 w-5 text-amber-400" />
+                    Local Extractive Synthesis Engine
+                  </>
+                )}
+              </h4>
+              <p className="text-xs text-slate-400 mt-1">
+                {llmStatus?.message || "Engine status loaded."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px] font-mono">
+              <div>
+                <span className="text-slate-500">Model Name:</span>{" "}
+                <span className="text-slate-200 font-semibold">{llmStatus?.model || "extractive-ranker-v1"}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">Key Status:</span>{" "}
+                <span className={llmStatus?.api_key_configured ? "text-emerald-400" : "text-amber-400"}>
+                  {llmStatus?.api_key_configured ? `Configured (${llmStatus.masked_key})` : "Not Configured"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <h4 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-              {llmStatus?.is_gemini_active ? (
-                <>
-                  <Sparkles className="h-5 w-5 text-emerald-400" />
-                  Google Gemini 2.0 Flash
-                </>
-              ) : (
-                <>
-                  <Cpu className="h-5 w-5 text-amber-400" />
-                  Local Extractive Synthesis Engine
-                </>
+          {/* Live Test Button & Response */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300">Connectivity Check:</span>
+              <button
+                id="btn-test-connection"
+                onClick={handleTestConnection}
+                disabled={testing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                  bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white
+                  disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" /> : <Sparkles className="h-3.5 w-3.5 text-cyan-400" />}
+                <span>{testing ? "Testing Ping..." : "Test Connection"}</span>
+              </button>
+            </div>
+
+            {testResult && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-mono ${
+                  testResult.is_gemini_active
+                    ? "bg-emerald-950/40 border-emerald-700/40 text-emerald-300"
+                    : "bg-slate-800/80 border-slate-700 text-slate-300"
+                }`}
+              >
+                <p className="font-bold">{testResult.is_gemini_active ? "✅ Gemini Ping Succeeded!" : "ℹ️ Status:"}</p>
+                <p className="mt-1 text-[11px] opacity-90">{testResult.message}</p>
+                {testResult.ping_test && (
+                  <p className="mt-1 text-[11px] text-cyan-300">Model Response: "{testResult.ping_test}"</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Configure / Update Gemini API Key Form */}
+          <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Key className="h-4 w-4 text-cyan-400" />
+              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                Configure or Update Gemini API Key
+              </h5>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Paste your Google Gemini API key below. We will test it immediately with Google's servers and activate Gemini 2.0 Flash upon verification.
+            </p>
+
+            <form onSubmit={handleSaveKey} className="space-y-3">
+              <div className="relative">
+                <input
+                  id="input-gemini-key"
+                  type="text"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              {saveMessage && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-950/50 border border-emerald-700/50 text-emerald-300 text-xs font-mono">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                  <span>{saveMessage}</span>
+                </div>
               )}
-            </h4>
-            <p className="text-xs text-slate-400 mt-1">
-              {llmStatus?.message || "Engine status loaded."}
+
+              {saveError && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-950/50 border border-rose-700/50 text-rose-300 text-xs font-mono">
+                  <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
+              <button
+                id="btn-save-key"
+                type="submit"
+                disabled={!apiKeyInput.trim() || saving}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold
+                  bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white
+                  disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-cyan-950/50 transition-all cursor-pointer"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
+                <span>{saving ? "Verifying with Google..." : "Verify & Activate Gemini"}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Informational Footer Note */}
+          <div className="text-[10px] text-slate-500 space-y-1">
+            <p>
+              • <strong>Gemini 2.0 Flash:</strong> Generates fluid institutional-grade research synthesis with exact speaker attributions.
+            </p>
+            <p>
+              • <strong>Local Extractive Engine:</strong> Works 100% offline with zero external network calls by ranking top document excerpts.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px] font-mono">
-            <div>
-              <span className="text-slate-500">Model Name:</span>{" "}
-              <span className="text-slate-200 font-semibold">{llmStatus?.model || "extractive-ranker-v1"}</span>
-            </div>
-            <div>
-              <span className="text-slate-500">Key Status:</span>{" "}
-              <span className={llmStatus?.api_key_configured ? "text-emerald-400" : "text-amber-400"}>
-                {llmStatus?.api_key_configured ? `Configured (${llmStatus.masked_key})` : "Not Configured"}
-              </span>
-            </div>
-          </div>
         </div>
 
-        {/* Live Test Button & Response */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-300">Connectivity Check:</span>
-            <button
-              id="btn-test-connection"
-              onClick={handleTestConnection}
-              disabled={testing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white
-                disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" /> : <Sparkles className="h-3.5 w-3.5 text-cyan-400" />}
-              <span>{testing ? "Testing Ping..." : "Test Connection"}</span>
-            </button>
-          </div>
-
-          {testResult && (
-            <div
-              className={`p-3 rounded-xl border text-xs font-mono ${
-                testResult.is_gemini_active
-                  ? "bg-emerald-950/40 border-emerald-700/40 text-emerald-300"
-                  : "bg-slate-800/80 border-slate-700 text-slate-300"
-              }`}
-            >
-              <p className="font-bold">{testResult.is_gemini_active ? "✅ Gemini Ping Succeeded!" : "ℹ️ Status:"}</p>
-              <p className="mt-1 text-[11px] opacity-90">{testResult.message}</p>
-              {testResult.ping_test && (
-                <p className="mt-1 text-[11px] text-cyan-300">Model Response: "{testResult.ping_test}"</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Configure / Update Gemini API Key Form */}
-        <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Key className="h-4 w-4 text-cyan-400" />
-            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              Configure or Update Gemini API Key
-            </h5>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Paste your Google Gemini API key below. We will test it immediately with Google's servers and activate Gemini 2.0 Flash upon verification.
-          </p>
-
-          <form onSubmit={handleSaveKey} className="space-y-3">
-            <div className="relative">
-              <input
-                id="input-gemini-key"
-                type="text"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            {saveMessage && (
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-950/50 border border-emerald-700/50 text-emerald-300 text-xs font-mono">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                <span>{saveMessage}</span>
-              </div>
-            )}
-
-            {saveError && (
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-950/50 border border-rose-700/50 text-rose-300 text-xs font-mono">
-                <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
-                <span>{saveError}</span>
-              </div>
-            )}
-
-            <button
-              id="btn-save-key"
-              type="submit"
-              disabled={!apiKeyInput.trim() || saving}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold
-                bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white
-                disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-cyan-950/50 transition-all cursor-pointer"
-            >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
-              <span>{saving ? "Verifying with Google..." : "Verify & Activate Gemini"}</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Informational Footer Note */}
-        <div className="text-[10px] text-slate-500 space-y-1">
-          <p>
-            • <strong>Gemini 2.0 Flash:</strong> Generates fluid institutional-grade research synthesis with exact speaker attributions.
-          </p>
-          <p>
-            • <strong>Local Extractive Engine:</strong> Works 100% offline with zero external network calls by ranking top document excerpts.
-          </p>
+        {/* Sticky Footer */}
+        <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-slate-800 bg-slate-900/95 backdrop-blur-sm px-5 py-3 shrink-0 text-xs">
+          <span className="text-[11px] font-mono text-slate-400 truncate max-w-[260px]">
+            {llmStatus?.is_gemini_active ? `✨ ${llmStatus?.engine_name || "Gemini AI"} Active` : "🛡️ Local Extractive Active"}
+          </span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg font-semibold bg-terminal-cyan hover:bg-cyan-400 text-slate-950 transition-colors cursor-pointer text-xs"
+          >
+            Done
+          </button>
         </div>
       </div>
     </div>
@@ -611,7 +663,23 @@ const LlmSettingsModal = ({ isOpen, onClose, llmStatus, onRefreshStatus }) => {
  * AiAnalystPanel — Full embedded chat interface for the AI Research Analyst.
  */
 export const AiAnalystPanel = ({ company }) => {
-  const [messages, setMessages] = useState([]);
+  const ticker = company?.ticker || "default";
+  const storageKey = `terminal_chat_${ticker}`;
+
+  // Initialize messages from localStorage if available
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`terminal_chat_${ticker}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn("Failed to load cached chat messages:", e);
+    }
+    return [];
+  });
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedCitation, setSelectedCitation] = useState(null);
@@ -620,6 +688,44 @@ export const AiAnalystPanel = ({ company }) => {
   const [showLlmModal, setShowLlmModal] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Sync messages to localStorage whenever they change
+  useEffect(() => {
+    try {
+      if (messages.length > 0) {
+        localStorage.setItem(storageKey, JSON.stringify(messages));
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+    } catch (e) {
+      console.warn("Failed to save chat messages:", e);
+    }
+  }, [messages, storageKey]);
+
+  // When switching company, reload that company's conversation from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`terminal_chat_${ticker}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setMessages(parsed);
+          return;
+        }
+      }
+      setMessages([]);
+    } catch (e) {
+      setMessages([]);
+    }
+  }, [ticker]);
+
+  // Clear chat history
+  const handleClearChat = () => {
+    setMessages([]);
+    try {
+      localStorage.removeItem(storageKey);
+    } catch (e) {}
+  };
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -696,10 +802,24 @@ export const AiAnalystPanel = ({ company }) => {
         if (engineDetails) {
           setLlmStatus((prev) => ({
             ...prev,
-            is_gemini_active: llmProvider === "gemini",
-            model: engineDetails.model || prev?.model,
-            engine_name: engineDetails.name || prev?.engine_name,
-            active_provider: llmProvider,
+            is_gemini_active:
+              llmProvider === "gemini"
+                ? true
+                : llmProvider === "conversational"
+                ? (prev?.is_gemini_active ?? true)
+                : false,
+            model:
+              llmProvider === "conversational"
+                ? (prev?.model || "gemini-3.5-flash-lite")
+                : (engineDetails.model || prev?.model),
+            engine_name:
+              llmProvider === "conversational"
+                ? (prev?.engine_name || "Google Gemini (gemini-3.5-flash-lite)")
+                : (engineDetails.name || prev?.engine_name),
+            active_provider:
+              llmProvider === "conversational"
+                ? (prev?.active_provider || "gemini")
+                : llmProvider,
             // Surface gemini_error so warning banner can render
             gemini_error: engineDetails.gemini_error || null,
           }));
@@ -785,6 +905,19 @@ export const AiAnalystPanel = ({ company }) => {
               </span>
               <Settings className="h-3 w-3 opacity-60 hover:opacity-100 ml-0.5" />
             </button>
+
+            {/* Clear Chat Button (visible when messages exist) */}
+            {messages.length > 0 && (
+              <button
+                id="btn-clear-chat"
+                onClick={handleClearChat}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium border border-slate-700/60 bg-slate-800/60 hover:bg-rose-950/40 hover:border-rose-700/50 text-slate-400 hover:text-rose-300 transition-all cursor-pointer"
+                title="Clear current research chat history"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Clear Chat</span>
+              </button>
+            )}
 
             {/* Document Context Badge */}
             {docContext && (

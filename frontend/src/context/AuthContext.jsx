@@ -5,11 +5,21 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem("terminal_user");
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem("terminal_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
   const [token, setToken] = useState(() => localStorage.getItem("terminal_token") || null);
-  const [loading, setLoading] = useState(true);
+
+  // If we already have both a token and cached user in localStorage, don't block render with a loader
+  const [loading, setLoading] = useState(() => {
+    const hasToken = !!localStorage.getItem("terminal_token");
+    const hasUser = !!localStorage.getItem("terminal_user");
+    return hasToken && !hasUser;
+  });
 
   // Check if token is still valid on mount
   useEffect(() => {
@@ -25,8 +35,12 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem("terminal_user", JSON.stringify(res.data.data));
         }
       } catch (err) {
-        console.error("Token verification failed:", err);
-        logout();
+        console.error("Token verification check:", err);
+        // Only log out if server explicitly returned 401 Unauthorized
+        // Preserve session on temporary network timeouts or offline state
+        if (err.response && err.response.status === 401) {
+          logout();
+        }
       } finally {
         setLoading(false);
       }

@@ -12,8 +12,10 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Redirect to the page they tried to visit, or default to home dashboard
-  const from = location.state?.from?.pathname || "/";
+  // Redirect to the page they tried to visit (including query parameters), or default to home dashboard
+  const from = location.state?.from
+    ? `${location.state.from.pathname}${location.state.from.search || ""}`
+    : "/";
 
   const handleSubmit = async (e) => {
     e.preventDefault();

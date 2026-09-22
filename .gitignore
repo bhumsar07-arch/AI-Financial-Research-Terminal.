@@ -34,6 +34,11 @@ share/python-wheels/
 .installed.cfg
 *.egg
 .pytest_cache/
+pytest.ini
+
+# HuggingFace model cache (downloaded sentence-transformers models)
+.cache/
+rag-service/.cache/
 
 # Environment Variables & Secrets (CRITICAL: NEVER COMMIT)
 .env
@@ -49,7 +54,8 @@ share/python-wheels/
 *.sqlite3
 pgdata/
 
-# Uploads and temporary data
+# Uploads and temporary data (PDFs for ingestion — not committed)
+rag-service/data/uploads/
 uploads/
 temp/
 scratch/
