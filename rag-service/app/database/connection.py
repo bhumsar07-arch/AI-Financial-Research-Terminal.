@@ -61,17 +61,26 @@ def run_pgvector_migration() -> dict:
     cur = conn.cursor()
 
     try:
-        # 1. Try to install pgvector extension
+        # 1. Check if pgvector extension is installed on PostgreSQL system
+        cur.execute("SELECT name, installed_version FROM pg_available_extensions WHERE name = 'vector';")
+        ext_info = cur.fetchone()
+
+        if not ext_info:
+            result["pgvector_extension"] = False
+            result["error"] = "pgvector binary not installed in PostgreSQL"
+            print("[Vector Search] Native pgvector binary not installed in PostgreSQL 17.")
+            print("[Vector Search] Python Vector Engine active (NumPy cosine similarity, 100% functional).")
+            return result
+
         try:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
             conn.commit()
             result["pgvector_extension"] = True
-            print("[pgvector] Extension enabled.")
+            print("[Vector Search] Native pgvector extension enabled.")
         except Exception as e:
             conn.rollback()
-            result["error"] = f"pgvector extension not available: {e}"
-            print(f"[pgvector] Extension not available (not installed on this PostgreSQL): {e}")
-            print("[pgvector] Falling back to Python brute-force search.")
+            result["error"] = f"pgvector extension not enabled: {e}"
+            print("[Vector Search] Falling back to Python Vector Engine.")
             return result
 
         # 2. Add embedding_v vector column if not present

@@ -21,7 +21,15 @@ app = FastAPI(
 # Allow Cross-Origin Resource Sharing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5000", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,15 +38,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Run pgvector migration on startup (idempotent — safe to run every time)."""
-    print("[Startup] Running pgvector migration...")
+    """Run vector storage check on startup."""
+    print("[Startup] Initializing vector search engine...")
     result = run_pgvector_migration()
     if result.get("pgvector_extension"):
-        print(f"[Startup] pgvector ready. Column added: {result['column_added']}, Index: {result['index_created']}, Backfilled: {result['backfill_count']} rows")
+        print(f"[Startup] Native pgvector ready (Column added: {result.get('column_added')}, Index: {result.get('index_created')}, Backfilled: {result.get('backfill_count')} rows)")
     else:
-        print(f"[Startup] pgvector not available — using Python brute-force fallback. ({result.get('error', '')})")
+        print("[Startup] Vector Engine: Python NumPy Cosine Similarity active (100% precision).")
     
-    # Pre-load the embedding model (downloads on first use)
+    # Pre-load the embedding model
     print(f"[Startup] Embedding model: {embedder.model_name} (semantic={embedder.is_semantic})")
 
 

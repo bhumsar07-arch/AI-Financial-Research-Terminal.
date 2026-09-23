@@ -41,6 +41,8 @@ This ensures answers are **traceable to source documents** with citations, page 
 
 ## System Architecture Diagram
 
+![RAG Pipeline Architecture & Dataflow Diagram](./rag_pipeline_diagram.png)
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    INGESTION PATH (one-time)                     │
