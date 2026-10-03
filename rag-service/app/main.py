@@ -12,6 +12,8 @@ from app.retrieval.vector_search import search_chunks, get_document_context
 from app.generation.generator import generate_answer, check_llm_status, set_gemini_key
 from app.embeddings.embedder import embedder
 
+import os
+
 app = FastAPI(
     title=settings.app_name,
     description="Dedicated AI, Transcript Processing, and Vector RAG Microservice for Financial Research",
@@ -19,17 +21,26 @@ app = FastAPI(
 )
 
 # Allow Cross-Origin Resource Sharing
+cors_origins = [
+    "http://localhost:5000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+
+if os.getenv("ALLOWED_ORIGINS"):
+    cors_origins.extend([o.strip() for o in os.getenv("ALLOWED_ORIGINS").split(",") if o.strip()])
+if os.getenv("FRONTEND_URL"):
+    cors_origins.append(os.getenv("FRONTEND_URL").strip().rstrip("/"))
+if os.getenv("BACKEND_URL"):
+    cors_origins.append(os.getenv("BACKEND_URL").strip().rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5000",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https?://([a-zA-Z0-9\-_]+\.)*(localhost|127\.0\.0\.1|vercel\.app|onrender\.com)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -224,10 +235,16 @@ def stream_document_pdf(document_id: int):
 
         file_path = Path(file_path_str)
         if not file_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"PDF file not found on disk at {file_path_str}"
-            )
+            # Cloud / cross-platform fallback: search relative to app root in data/uploads/
+            filename = Path(file_path_str).name
+            candidate = Path(__file__).resolve().parent.parent / "data" / "uploads" / filename
+            if candidate.exists():
+                file_path = candidate
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"PDF file '{filename}' not found on disk"
+                )
 
         clean_title = re.sub(r'[^a-zA-Z0-9_\-\. ]', '_', title or "document")
         return FileResponse(
