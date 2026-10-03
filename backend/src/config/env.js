@@ -10,4 +10,9 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || "fallback_secret_key_terminal_2026",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "24h",
   ragServiceUrl: process.env.RAG_SERVICE_URL || "http://localhost:8000",
+  frontendUrl: process.env.FRONTEND_URL || "",
+  allowedOrigins: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+    : [],
 };
+

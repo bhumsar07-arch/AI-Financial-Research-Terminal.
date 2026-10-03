@@ -8,6 +8,7 @@ import companyRoutes from "./routes/company.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { errorResponse } from "./utils/apiResponse.js";
+import { config } from "./config/env.js";
 
 // Initialize Express application
 const app = express();
@@ -20,8 +21,8 @@ app.use(
 );
 
 // 2. Cross-Origin Resource Sharing (CORS)
-// Allows our React frontend (localhost, 127.0.0.1, any dev port) to communicate with Express
-const allowedOrigins = [
+// Allows local dev ports and production frontend domains (e.g. Vercel)
+const baseOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5174",
@@ -30,14 +31,22 @@ const allowedOrigins = [
   "http://127.0.0.1:3000",
 ];
 
+if (config.frontendUrl) {
+  baseOrigins.push(config.frontendUrl.replace(/\/$/, ""));
+}
+if (config.allowedOrigins && config.allowedOrigins.length > 0) {
+  baseOrigins.push(...config.allowedOrigins);
+}
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, curl, or server-to-server)
       if (!origin) return callback(null, true);
       if (
-        allowedOrigins.includes(origin) ||
-        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        baseOrigins.includes(origin) ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        /^https?:\/\/([a-zA-Z0-9\-_]+\.)*(vercel\.app|onrender\.com)$/.test(origin)
       ) {
         return callback(null, true);
       }
