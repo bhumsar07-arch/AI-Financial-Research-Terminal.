@@ -3,7 +3,7 @@
 ## 1. Performance & Latency Requirements (NFR-PERF)
 
 * **NFR-PERF-01**: Standard REST endpoints (Authentication, Company profile, Financial statements, Watchlist) must respond within **< 150 ms** under normal local load.
-* **NFR-PERF-02**: Vector retrieval (pgvector similarity search with metadata filtering) must complete within **< 200 ms** over an initial corpus of up to 50,000 chunks.
+* **NFR-PERF-02**: Qdrant vector retrieval with company metadata filtering should complete within **< 200 ms** over an initial corpus of up to 50,000 chunks; measure this with the Ragas benchmark runner's latency report.
 * **NFR-PERF-03**: End-to-end RAG query latency (Express -> Python -> Retrieval -> Rerank -> LLM Generation -> Express -> React) should complete within **< 3.5 seconds** (assuming standard LLM API streaming/response times).
 * **NFR-PERF-04**: Database connections in Express must be managed via an efficient connection pool (postgres-js / node-postgres) to prevent connection starvation.
 

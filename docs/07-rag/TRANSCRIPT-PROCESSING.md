@@ -43,7 +43,7 @@ Raw Transcript Text
        │
        ▼
 [Embedding & Database Storage]
-  - Stored in `document_chunks` with rich speaker columns populated.
+  - Stored as Qdrant points with rich speaker and citation metadata populated.
 ```
 
 ---

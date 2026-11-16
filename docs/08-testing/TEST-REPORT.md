@@ -1,5 +1,7 @@
 # Test Report — AI Financial Research Terminal
 
+> Historical Sprint 0 planning record. Its 1536-dimensional pgvector note describes the initial design; the current RAG system uses 384-dimensional embeddings in Qdrant. See [RAG Evaluation](../07-rag/RAG-EVALUATION.md) for current measured results.
+
 * **Report Version**: Sprint 0 Baseline
 * **Date**: September 2026
 * **Status**: Ready for Sprint 1

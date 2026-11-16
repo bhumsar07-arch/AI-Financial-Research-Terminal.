@@ -23,8 +23,8 @@
                         │ (Drizzle ORM)                                    │ (JSON)
                         ▼                                                  ▼
          ┌───────────────────────────────┐                  ┌─────────────────────────────┐
-         │       PostgreSQL Database     │                  │     Python RAG Service      │
-         │      + pgvector Extension     │◄─────────────────┤     FastAPI + Uvicorn (8000)│
+         │ PostgreSQL relational data   │                  │     Python RAG Service      │
+         │                              │                  │ FastAPI + Qdrant + LangChain│
          │             (5432)            │  Direct Vector   │  LangChain/PyPDF/SentenceTx │
          └───────────────────────────────┘   Read & Ingest  └──────────────┬──────────────┘
                         ▲                                                  │
@@ -61,15 +61,16 @@
 ### C. AI / RAG Microservice (Python + FastAPI)
 * Runs on port `8000`.
 * Dedicated exclusively to AI, PDF processing, transcript parsing, chunking, embedding generation, vector similarity search, and LLM orchestration.
-* Accesses PostgreSQL directly for high-performance vector search operations on `document_chunks`.
+* Reads document records from PostgreSQL and retrieves chunk vectors from Qdrant.
 * Implements the prompt engineering pipeline that forces factual attribution and citation structuring.
 
-### D. Unified Persistence Layer (PostgreSQL + pgvector)
-* Runs on port `5432`.
-* Single source of truth for all system data:
-  - Relational: Users, Companies, Financial Metrics, Documents Metadata, Chat Sessions, Messages, Watchlists.
-  - Vector: Document and transcript chunk embeddings (`vector(1536)` or `vector(768)`).
-* Managed via Drizzle ORM migrations for schemas and schema version control.
+### D. Persistence Layer (PostgreSQL + Qdrant)
+
+* **PostgreSQL** stores users, companies, financial metrics, filing records, and chat data.
+* **Qdrant** stores document chunks, embeddings, and retrieval/citation metadata.
+* PostgreSQL runs on port `5432` and stores relational application data: users, companies, financial metrics, document metadata, chat sessions, messages, and watchlists.
+* Qdrant stores document and transcript chunk embeddings (384 dimensions) plus retrieval and citation metadata.
+* Drizzle ORM manages the PostgreSQL schema; Qdrant collections and indexes are initialized by the RAG service.
 
 ---
 
@@ -79,6 +80,7 @@
 | :--- | :--- | :--- | :--- |
 | **Frontend** | `http://localhost:5173` | HTTP / REST | Express API (`http://localhost:5000/api/*`) |
 | **Express API** | `http://localhost:5000` | HTTP / REST | React Frontend, PostgreSQL, Python RAG |
-| **Python RAG** | `http://localhost:8000` | HTTP / REST | Express API, PostgreSQL, External LLM API |
-| **PostgreSQL** | `localhost:5432` | TCP / Postgres Wire | Express API (via Drizzle), Python RAG (via psycopg/SQLAlchemy) |
+| **Python RAG** | `http://localhost:8000` | HTTP / REST | Express API, PostgreSQL, Qdrant, Gemini via LangChain |
+| **PostgreSQL** | `localhost:5432` | TCP / Postgres Wire | Express API (via Drizzle), Python RAG (relational data) |
+| **Qdrant** | `localhost:6333` | HTTP / REST | Python RAG vector retrieval |
 | **External LLM**| HTTPS (`api.openai.com`) | HTTPS / REST | Python RAG Service |

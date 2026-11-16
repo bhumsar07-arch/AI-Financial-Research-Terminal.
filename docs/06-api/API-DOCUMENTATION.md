@@ -356,8 +356,9 @@ All protected endpoints require the HTTP header:
   ```json
   {
     "status": "healthy",
-    "pgvector": "connected",
-    "embedding_model": "text-embedding-3-small"
+    "database": {"connected": true},
+    "vector_store": {"connected": true, "collection": "financial_documents", "points": 0},
+    "embedding": {"model": "sentence-transformers/all-MiniLM-L6-v2", "dimension": 384}
   }
   ```
 

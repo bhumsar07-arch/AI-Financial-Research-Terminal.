@@ -2,7 +2,7 @@
 Answer generator for the AI Financial Research Analyst.
 
 Supports two modes:
-  1. External LLM API (Google Gemini or OpenAI) — set GEMINI_API_KEY or OPENAI_API_KEY in .env
+  1. LangChain + Google Gemini — set GEMINI_API_KEY in .env
   2. Local extractive synthesis — runs 100% offline, no API keys needed.
      Extracts and ranks the most relevant evidence passages and composes
      a structured answer with speaker attributions and citations.
@@ -12,11 +12,14 @@ without triggering the full RAG pipeline.
 """
 
 import os
-import json
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import dotenv
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+from app.config.settings import settings
 
 # Load environment variables across possible terminal .env paths
 def _reload_env():
@@ -33,21 +36,6 @@ _reload_env()
 def get_configured_gemini_key() -> Optional[str]:
     _reload_env()
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-
-# Try importing LLM clients (optional dependencies)
-try:
-    import google.generativeai as genai
-    HAS_GEMINI = True
-except ImportError:
-    HAS_GEMINI = False
-
-try:
-    import openai
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
-
-
 
 # ---------------------------------------------------------------------------
 # Grounding Prompt Template for LLM-based generation
@@ -118,81 +106,22 @@ def _build_citations(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Mode 1: LLM-powered generation (Gemini or OpenAI)
+# Mode 1: LangChain + Google Gemini
 # ---------------------------------------------------------------------------
 
 def _generate_with_gemini(query: str, evidence: str) -> tuple[str, str]:
-    """
-    Generate answer using Google Gemini API.
-    Tries candidate models in order to handle Google's model lifecycle/deprecation gracefully.
-    """
+    """Generate a grounded answer with a LangChain prompt/model/output chain."""
     api_key = get_configured_gemini_key()
     if not api_key:
         raise ValueError("GEMINI_API_KEY not configured")
-
-    genai.configure(api_key=api_key)
-
-    prompt = f"""{SYSTEM_PROMPT}
-
-## EVIDENCE PASSAGES
-{evidence}
-
-## ANALYST QUESTION
-{query}
-
-## YOUR ANALYSIS
-Provide a thorough, evidence-grounded answer:"""
-
-    candidate_models = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-3.6-flash",
-        "gemini-flash-latest",
-        "gemini-3.8-flash",
-    ]
-    last_exc = None
-
-    for model_name in candidate_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            if response and response.text:
-                return response.text, model_name
-        except Exception as e:
-            last_exc = e
-            continue
-
-    raise last_exc or ValueError("Failed to generate content with any Gemini candidate model")
-
-
-def _generate_with_openai(query: str, evidence: str) -> str:
-    """Generate answer using OpenAI API."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set")
-
-    client = openai.OpenAI(api_key=api_key)
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"""## EVIDENCE PASSAGES
-{evidence}
-
-## ANALYST QUESTION
-{query}
-
-## YOUR ANALYSIS
-Provide a thorough, evidence-grounded answer:"""
-            }
-        ],
-        temperature=0.3,
-        max_tokens=1500,
-    )
-    return response.choices[0].message.content
+    os.environ["GOOGLE_API_KEY"] = api_key
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        ("human", "EVIDENCE PASSAGES\n{evidence}\n\nANALYST QUESTION\n{query}\n\nGive a concise, evidence-grounded answer."),
+    ])
+    model = ChatGoogleGenerativeAI(model=settings.llm_model, temperature=0.2, max_retries=2)
+    chain = prompt | model | StrOutputParser()
+    return chain.invoke({"evidence": evidence, "query": query}), settings.llm_model
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +313,7 @@ def generate_answer(
     Args:
         query: The analyst's question.
         retrieved_chunks: List of chunk dicts from vector_search.search_chunks().
-        use_llm: Force a specific LLM provider ('gemini', 'openai') or None for auto-detect.
+        use_llm: Provider override ('gemini') or None for configured provider.
 
     Returns:
         Dict with keys: answer, citations, source_count, llm_provider, concall_available.
@@ -413,44 +342,23 @@ def generate_answer(
         for c in retrieved_chunks
     )
 
-    # Determine which generation mode to use
+    # Use LangChain Gemini when configured; keep the extractive fallback available offline.
     evidence_text = _build_evidence_context(retrieved_chunks)
     llm_provider = "local_extractive"
     gemini_error = None
-    answer = ""
-
-    # Auto-detect or use specified LLM
     gemini_key = get_configured_gemini_key()
     provider = use_llm or os.getenv("LLM_PROVIDER", "auto")
-
-    gemini_model = "gemini-3.5-flash-lite"
-    if provider == "gemini" or (provider == "auto" and gemini_key):
-        if HAS_GEMINI and gemini_key:
-            try:
-                answer, used_model = _generate_with_gemini(query, evidence_text)
-                llm_provider = "gemini"
-                gemini_model = used_model
-            except Exception as e:
-                print(f"[Generator] Gemini API error, falling back to local: {e}")
-                gemini_error = str(e)
-                answer = _generate_local_synthesis(query, retrieved_chunks)
-        else:
-            answer = _generate_local_synthesis(query, retrieved_chunks)
-
-    elif provider == "openai" or (provider == "auto" and os.getenv("OPENAI_API_KEY")):
-        if HAS_OPENAI and os.getenv("OPENAI_API_KEY"):
-            try:
-                answer = _generate_with_openai(query, evidence_text)
-                llm_provider = "openai"
-            except Exception as e:
-                print(f"[Generator] OpenAI API error, falling back to local: {e}")
-                answer = _generate_local_synthesis(query, retrieved_chunks)
-        else:
-            answer = _generate_local_synthesis(query, retrieved_chunks)
-
-    else:
-        # Default: local extractive synthesis
-        answer = _generate_local_synthesis(query, retrieved_chunks)
+    answer = _generate_local_synthesis(query, retrieved_chunks)
+    gemini_model = settings.llm_model
+    if provider not in ("auto", "gemini"):
+        raise ValueError("Only the Gemini provider is configured for LangChain generation")
+    if gemini_key:
+        try:
+            answer, gemini_model = _generate_with_gemini(query, evidence_text)
+            llm_provider = "gemini"
+        except Exception as exc:
+            print(f"[Generator] LangChain Gemini call failed; using extractive fallback: {exc}")
+            gemini_error = str(exc)
 
     engine_details = {
         "provider": llm_provider,
@@ -477,12 +385,8 @@ def generate_answer(
 # ---------------------------------------------------------------------------
 
 def check_llm_status(test_ping: bool = False) -> Dict[str, Any]:
-    """
-    Checks if Gemini is available, configured, and responsive.
-    Tests candidate models in order to ensure operational health.
-    """
+    """Report LangChain Gemini configuration and optionally perform a live ping."""
     gemini_key = get_configured_gemini_key()
-
     if not gemini_key:
         return {
             "status": "offline_local",
@@ -491,56 +395,16 @@ def check_llm_status(test_ping: bool = False) -> Dict[str, Any]:
             "model": "extractive-ranker-v1",
             "is_gemini_active": False,
             "api_key_configured": False,
-            "message": "Running on Local Extractive Synthesis. No Gemini API key detected in .env.",
+            "message": "No Gemini API key detected; using local extractive fallback.",
         }
 
     masked = gemini_key[:4] + "..." + gemini_key[-4:] if len(gemini_key) > 8 else "***"
-
-    if not HAS_GEMINI:
-        return {
-            "status": "sdk_missing",
-            "active_provider": "local_extractive",
-            "engine_name": "Local Extractive Synthesis Engine",
-            "model": "extractive-ranker-v1",
-            "is_gemini_active": False,
-            "api_key_configured": True,
-            "masked_key": masked,
-            "message": "API key present, but 'google-generativeai' package is not installed.",
-        }
-
     ping_result = None
-    active_model_name = "gemini-3.5-flash-lite"
-
     if test_ping:
         try:
-            genai.configure(api_key=gemini_key)
-            candidate_models = [
-                "gemini-3.5-flash-lite",
-                "gemini-3.5-flash",
-                "gemini-3.6-flash",
-                "gemini-flash-latest",
-                "gemini-3.8-flash",
-            ]
-            last_err = None
-            ping_success = False
-
-            for m_name in candidate_models:
-                try:
-                    model = genai.GenerativeModel(m_name)
-                    resp = model.generate_content("Ping test. Reply with 'PONG'")
-                    if resp and resp.text:
-                        ping_result = resp.text.strip()
-                        active_model_name = m_name
-                        ping_success = True
-                        break
-                except Exception as e:
-                    last_err = e
-                    continue
-
-            if not ping_success:
-                raise last_err or Exception("Gemini ping failed on all models")
-
-        except Exception as e:
+            os.environ["GOOGLE_API_KEY"] = gemini_key
+            ping_result = str(ChatGoogleGenerativeAI(model=settings.llm_model, max_retries=1).invoke("Reply with PONG").content).strip()
+        except Exception as exc:
             return {
                 "status": "error",
                 "active_provider": "local_extractive",
@@ -549,93 +413,53 @@ def check_llm_status(test_ping: bool = False) -> Dict[str, Any]:
                 "is_gemini_active": False,
                 "api_key_configured": True,
                 "masked_key": masked,
-                "message": f"Gemini API test call failed: {str(e)}",
-                "error": str(e),
+                "message": f"LangChain Gemini test call failed: {exc}",
+                "error": str(exc),
             }
 
     return {
         "status": "connected",
         "active_provider": "gemini",
-        "engine_name": f"Google Gemini ({active_model_name})",
-        "model": active_model_name,
+        "engine_name": f"Google Gemini through LangChain ({settings.llm_model})",
+        "model": settings.llm_model,
         "is_gemini_active": True,
         "api_key_configured": True,
         "masked_key": masked,
         "ping_test": ping_result,
         "embedding_model": "all-MiniLM-L6-v2 (semantic)",
-        "message": f"Google Gemini ({active_model_name}) is configured and verified active.",
+        "message": f"Google Gemini ({settings.llm_model}) is configured through LangChain.",
     }
 
 
 def set_gemini_key(api_key: str) -> Dict[str, Any]:
-    """
-    Validates and stores the Gemini API key in rag-service/.env.
-    """
+    """Validate a Gemini key through LangChain, then persist it to rag-service/.env."""
     clean_key = api_key.strip()
     if not clean_key:
         raise ValueError("API key cannot be empty")
+    os.environ["GOOGLE_API_KEY"] = clean_key
+    try:
+        ChatGoogleGenerativeAI(model=settings.llm_model, max_retries=1).invoke("Reply with PONG")
+    except Exception as exc:
+        os.environ.pop("GOOGLE_API_KEY", None)
+        raise ValueError(f"Gemini API verification failed: {exc}") from exc
 
-    if not HAS_GEMINI:
-        raise ValueError("google-generativeai package is not installed.")
-
-    # Validate against Gemini API across candidate models
-    candidate_models = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-3.6-flash",
-        "gemini-flash-latest",
-        "gemini-3.8-flash",
-    ]
-    verified = False
-    active_model_name = "gemini-3.5-flash-lite"
-    last_err = None
-
-    for m_name in candidate_models:
-        try:
-            genai.configure(api_key=clean_key)
-            model = genai.GenerativeModel(m_name)
-            resp = model.generate_content("Ping")
-            if resp and resp.text:
-                verified = True
-                active_model_name = m_name
-                break
-        except Exception as e:
-            last_err = e
-            continue
-
-    if not verified:
-        raise ValueError(f"Gemini API verification failed: {str(last_err)}")
-
-    # Update runtime environment
     os.environ["GEMINI_API_KEY"] = clean_key
-
-    # Save to rag-service/.env
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-    lines = []
-    found = False
-    if env_path.exists():
-        with open(env_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        new_lines = []
-        for line in lines:
-            if line.startswith("GEMINI_API_KEY="):
-                new_lines.append(f"GEMINI_API_KEY={clean_key}\n")
-                found = True
-            else:
-                new_lines.append(line)
-        lines = new_lines
-
-    if not found:
+    lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True) if env_path.exists() else []
+    replaced = False
+    for index, line in enumerate(lines):
+        if line.startswith("GEMINI_API_KEY="):
+            lines[index] = f"GEMINI_API_KEY={clean_key}\n"
+            replaced = True
+    if not replaced:
         lines.append(f"\nGEMINI_API_KEY={clean_key}\n")
-
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+    env_path.write_text("".join(lines), encoding="utf-8")
 
     masked = clean_key[:4] + "..." + clean_key[-4:] if len(clean_key) > 8 else "***"
     return {
         "success": True,
-        "message": f"Gemini API key validated and activated successfully ({active_model_name})!",
+        "message": f"Gemini API key validated and activated successfully ({settings.llm_model})!",
         "masked_key": masked,
-        "engine_name": f"Google Gemini ({active_model_name})",
+        "engine_name": f"Google Gemini ({settings.llm_model})",
         "active_provider": "gemini",
     }

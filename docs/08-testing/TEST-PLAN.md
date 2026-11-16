@@ -37,7 +37,7 @@ The project utilizes a multi-layered testing strategy combining unit tests, inte
 * **Sprint 2**: Password hashing unit tests, JWT issuance/validation tests, registration duplicate rejection test.
 * **Sprint 3**: Deterministic ratio calculation unit tests (Gross margin, Operating margin, RoE, Debt/Equity), company search tests.
 * **Sprint 4**: Frontend component tests, protected route navigation tests.
-* **Sprint 5**: Transcript parser regex tests, PDF extraction tests, pgvector insertion tests.
+* **RAG pipeline**: Transcript parser tests, PDF extraction tests, Qdrant metadata-filter and ingestion tests, plus a Ragas benchmark run against curated reference answers.
 * **Sprint 6**: End-to-end RAG query flow test, citation formatting test.
 * **Sprint 7**: Watchlist CRUD tests, multi-company comparison test, RAG benchmark evaluation run.
 * **Sprint 8**: Full regression test suite execution, security vulnerability scan.

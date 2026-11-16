@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ITC-AGRI-FY24",
+    "ticker": "ITC",
+    "question": "Why did ITC's agribusiness revenue decline in FY24?",
+    "reference": "Export restrictions on wheat and rice affected ITC's agribusiness trading revenue.",
+    "expected_source": "FY24"
+  },
+  {
+    "id": "ITC-PAPER-MARGINS-FY24",
+    "ticker": "ITC",
+    "question": "What caused margin pressure in ITC's Paperboards and Packaging business in FY24?",
+    "reference": "Higher wood costs and low-priced imports from China pressured the Paperboards and Packaging business.",
+    "expected_source": "FY24"
+  },
+  {
+    "id": "ITC-HOTELS-STRATEGY",
+    "ticker": "ITC",
+    "question": "What capital allocation strategy did ITC discuss for the Hotels demerger?",
+    "reference": "ITC discussed a Hotels demerger and an asset-right strategy for the hotel business.",
+    "expected_source": "hotel"
+  },
+  {
+    "id": "ITC-FMCG-RURAL-DEMAND",
+    "ticker": "ITC",
+    "question": "What concerns did analysts raise about FMCG-Others volume growth?",
+    "reference": "Analysts questioned the pace of recovery in rural demand and its effect on FMCG-Others volume growth.",
+    "expected_source": "transcript"
+  }
+]

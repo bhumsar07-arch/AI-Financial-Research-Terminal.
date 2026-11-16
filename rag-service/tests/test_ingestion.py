@@ -4,7 +4,6 @@ from pathlib import Path
 from app.ingestion.transcript_parser import TranscriptParser
 from app.ingestion.chunker import chunker
 from app.embeddings.embedder import embedder
-from app.database.connection import check_db_health
 
 def test_transcript_speaker_segmentation():
     """Verify that transcript parser accurately extracts speakers, roles, and management flags."""
@@ -93,14 +92,18 @@ def test_embeddings_generation():
 
     assert sim_related > sim_unrelated, f"Expected {sim_related} > {sim_unrelated}"
 
-def test_database_connection():
-    """Verify PostgreSQL database connectivity from Python."""
-    assert check_db_health() is True, "Database should be reachable and healthy"
-
-def test_fastapi_health_endpoint():
-    """Verify FastAPI GET /health endpoint."""
+def test_fastapi_health_endpoint(monkeypatch):
+    """Verify health reports relational and vector stores independently."""
     from starlette.testclient import TestClient
-    from app.main import app
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "check_db_health", lambda: True)
+    monkeypatch.setattr(main_module, "qdrant_health", lambda: {
+        "connected": True,
+        "collection": "financial_documents",
+        "points": 12,
+    })
+    app = main_module.app
     client = TestClient(app)
     res = client.get("/health")
     assert res.status_code == 200
@@ -108,3 +111,4 @@ def test_fastapi_health_endpoint():
     assert data["status"] == "ok"
     assert data["service"] == "rag-service"
     assert data["database"]["connected"] is True
+    assert data["vector_store"]["connected"] is True

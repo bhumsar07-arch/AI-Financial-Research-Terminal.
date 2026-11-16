@@ -21,7 +21,7 @@ services:
       - key: FRONTEND_URL
         sync: false
 
-  # 2. Python RAG Microservice (FastAPI + SentenceTransformers)
+  # 2. Python RAG Microservice (FastAPI + Qdrant + LangChain)
   - type: web
     name: financial-terminal-rag
     env: python
@@ -32,6 +32,14 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: financial_documents
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
       - key: GEMINI_API_KEY
         sync: false
       - key: FRONTEND_URL

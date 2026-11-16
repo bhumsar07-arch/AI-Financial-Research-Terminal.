@@ -43,7 +43,7 @@
 * **FR-RAG-01**: The Python service shall ingest PDF documents, extract text, clean artifacts, and detect page boundaries.
 * **FR-RAG-02**: The Python service shall parse earnings call transcripts, segmenting text by speaker name, role (CEO, CFO, Analyst), and section (`prepared_remarks` vs `q_and_a`).
 * **FR-RAG-03**: The ingestion engine shall divide extracted content into semantic chunks (400–800 tokens) with configurable overlap (50–100 tokens), attaching rich metadata (Company ID, Doc Type, Year, Quarter, Page, Speaker, Section).
-* **FR-RAG-04**: The service shall generate dense vector embeddings (e.g., using OpenAI `text-embedding-3-small` or HuggingFace sentence-transformers) and store them in PostgreSQL via `pgvector`.
+* **FR-RAG-04**: The service shall generate 384-dimensional embeddings with SentenceTransformers and store document chunks and citation metadata in Qdrant.
 * **FR-RAG-05**: The Python service shall provide a `/query` endpoint accepting a company ID, user question, and optional filters (fiscal year, quarter, document types).
 * **FR-RAG-06**: The retrieval pipeline shall perform vector similarity search (cosine distance) with metadata pre-filtering, followed by optional cross-encoder reranking.
 * **FR-RAG-07**: The generation engine shall construct a prompt incorporating deterministic company financials and retrieved text evidence, generating an answer with strict attribution rules.

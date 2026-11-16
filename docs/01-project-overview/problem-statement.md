@@ -31,6 +31,6 @@ When users ask ChatGPT or generic LLMs financial questions:
 
 The **AI Financial Research Terminal** solves these problems by:
 1. **Structuring Quantitative Data**: Storing standardized financial statements in PostgreSQL and computing ratios (margins, growth rates, debt metrics) deterministically in Node.js.
-2. **Targeted Qualitative RAG**: Indexing official Annual Reports and Earnings Call Transcripts with **pgvector**, preserving speaker metadata (CEO vs CFO vs Analyst) and section metadata.
+2. **Targeted Qualitative RAG**: Indexing official Annual Reports and Earnings Call Transcripts in **Qdrant**, preserving speaker and section metadata while keeping relational application records in PostgreSQL.
 3. **Evidence-Grounded Querying**: Synthesizing answers strictly from retrieved source chunks, enforcing exact citation of document titles, page numbers, and speaker roles.
 4. **Interactive Financial Interface**: A clean terminal interface displaying interactive Recharts visualizations alongside the AI research assistant.

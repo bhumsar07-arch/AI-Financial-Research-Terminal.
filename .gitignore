@@ -74,3 +74,5 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+rag-service/reports/
+rag-service/data/qdrant/

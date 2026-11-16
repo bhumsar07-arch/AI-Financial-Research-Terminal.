@@ -36,9 +36,9 @@ This document describes the pipeline for discovering, validating, parsing, chunk
   - Batch embed text chunks (batches of 32 or 64) via embedding model
          │
          ▼
-[6. Transactional Storage in PostgreSQL]
-  - Insert document record in `documents`
-  - Batch insert chunks into `document_chunks` with `vector(1536)`
+[6. Split Storage]
+  - Insert document record and file metadata in PostgreSQL
+  - Upsert chunks, 384-dimensional vectors, and citation metadata into Qdrant
 ```
 
 ---
@@ -50,7 +50,7 @@ This document describes the pipeline for discovering, validating, parsing, chunk
 | **Chunk Size** | 500 tokens (~375 words) | Balances semantic richness with high retrieval specificity. |
 | **Chunk Overlap**| 60 tokens (~45 words) | Prevents losing context when an explanation spans a chunk boundary. |
 | **Splitter** | Recursive Character Splitter | Splits on `\n\n` (paragraphs), then `\n`, then sentences (`. `). |
-| **Metadata** | `page_number`, `document_id`, `company_id`, `section` | Mandatory for building verifiable citations in UI. |
+| **Metadata** | `page_number`, `document_id`, `company_id`, `section`, speaker and filing details | Stored with Qdrant points for company-filtered retrieval and citations. |
 
 ---
 

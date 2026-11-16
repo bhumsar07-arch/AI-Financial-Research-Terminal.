@@ -38,8 +38,8 @@
 2. **Deterministic Data Integrity**:
    - 100% of mathematical and ratio calculations executed in JavaScript backend logic; zero financial calculations delegated to the LLM.
 3. **Robust Vector Storage**:
-   - PostgreSQL unified database utilizing the `pgvector` extension for storing 768- or 1536-dimensional embeddings alongside structured relational data.
+   - Qdrant stores 384-dimensional document embeddings and searchable citation metadata; PostgreSQL stores relational application data and filing records.
 4. **Measurable RAG Evaluation**:
-   - Implement quantitative evaluation metrics (Faithfulness, Answer Relevance, Context Precision, Retrieval Latency) using a curated ground-truth test dataset.
+   - Use Ragas metrics for Faithfulness, Factual Correctness, Context Precision, and Context Recall; record retrieval and generation latency against a curated benchmark.
 5. **Production Quality & Clean Code**:
    - Strict adherence to modular architecture, parameterized SQL via Drizzle ORM, input validation, defensive error handling, and comprehensive documentation.

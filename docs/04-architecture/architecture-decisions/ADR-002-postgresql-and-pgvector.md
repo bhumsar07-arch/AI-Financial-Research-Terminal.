@@ -1,5 +1,7 @@
 # ADR-002: Unified PostgreSQL Database with pgvector Extension
 
+> **Superseded (2026-11):** PostgreSQL remains the relational database, while Qdrant now stores RAG vectors and chunk payloads. See [ADR-009](ADR-009-qdrant-for-rag-vectors.md).
+
 * **Status**: Accepted
 * **Date**: September 2026
 

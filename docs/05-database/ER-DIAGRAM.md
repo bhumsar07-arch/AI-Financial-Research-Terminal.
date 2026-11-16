@@ -1,6 +1,6 @@
 # Entity Relationship (ER) Diagram — AI Financial Research Terminal
 
-This diagram illustrates the relational architecture of the PostgreSQL database, including foreign keys, cardinalities, and the vector storage integration.
+This diagram illustrates the relational PostgreSQL schema. RAG vectors and chunk payloads are stored in Qdrant and are intentionally not represented as relational tables.
 
 ---
 
@@ -13,11 +13,9 @@ erDiagram
     
     companies ||--o{ financial_metrics : "reports"
     companies ||--o{ documents : "publishes"
-    companies ||--o{ document_chunks : "denormalized_link"
     companies ||--o{ watchlists : "tracked_in"
     companies ||--o{ chat_sessions : "context_for"
 
-    documents ||--o{ document_chunks : "partitioned_into"
 
     chat_sessions ||--o{ chat_messages : "contains"
 
@@ -87,22 +85,6 @@ erDiagram
         timestamp created_at
     }
 
-    document_chunks {
-        int id PK
-        int document_id FK
-        int company_id FK
-        int chunk_index
-        text content
-        int token_count
-        int page_number
-        string speaker_name
-        string speaker_role
-        boolean is_management
-        string section
-        vector embedding
-        timestamp created_at
-    }
-
     chat_sessions {
         int id PK
         int user_id FK
@@ -138,4 +120,4 @@ erDiagram
 3. **User to Watchlist (`1 : N`) & Company to Watchlist (`1 : N`)**: Represents the many-to-many relationship between users and companies they follow, with a unique constraint on `(user_id, company_id)`.
 4. **Company to Financial Metrics (`1 : N`)**: A company has many quarterly and annual historical financial records.
 5. **Company to Documents (`1 : N`)**: A company publishes many documents (Annual Reports, Transcripts, Filings).
-6. **Document to Document Chunks (`1 : N`)**: A single document is segmented into multiple semantic chunks. Chunks inherit metadata (`company_id`, `speaker_name`, `page_number`) and contain the `vector(1536)` embedding.
+6. **Document to Qdrant Points (`1 : N`, logical link)**: A document's text is segmented into Qdrant points. Each point carries `document_id`, `company_id`, source page, speaker, and section metadata with a 384-dimensional vector; PostgreSQL foreign keys do not extend into Qdrant.

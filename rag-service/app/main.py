@@ -6,7 +6,8 @@ from typing import Optional
 from pathlib import Path
 import re
 from app.config.settings import settings
-from app.database.connection import check_db_health, get_db_connection, run_pgvector_migration
+from app.database.connection import check_db_health, get_db_connection
+from app.database.qdrant_store import qdrant_health
 from app.ingestion.pipeline import ingest_itc_transcript, ingest_uploaded_documents
 from app.retrieval.vector_search import search_chunks, get_document_context
 from app.generation.generator import generate_answer, check_llm_status, set_gemini_key
@@ -49,14 +50,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Run vector storage check on startup."""
-    print("[Startup] Initializing vector search engine...")
-    result = run_pgvector_migration()
-    if result.get("pgvector_extension"):
-        print(f"[Startup] Native pgvector ready (Column added: {result.get('column_added')}, Index: {result.get('index_created')}, Backfilled: {result.get('backfill_count')} rows)")
-    else:
-        print("[Startup] Vector Engine: Python NumPy Cosine Similarity active (100% precision).")
-    
+    """Check the relational and vector stores separately."""
+    print(f"[Startup] Qdrant: {qdrant_health()}")
     # Pre-load the embedding model
     print(f"[Startup] Embedding model: {embedder.model_name} (semantic={embedder.is_semantic})")
 
@@ -70,7 +65,7 @@ class QueryRequest(BaseModel):
     company_id: int = Field(..., description="Company ID to scope the search")
     ticker: str = Field(default="ITC", description="Company ticker symbol")
     top_k: int = Field(default=5, ge=1, le=20, description="Number of evidence passages to retrieve")
-    use_llm: Optional[str] = Field(default=None, description="Force LLM provider: 'gemini', 'openai', or None for auto")
+    use_llm: Optional[str] = Field(default=None, description="Use the configured LangChain Gemini provider")
 
 
 class IngestRequest(BaseModel):
@@ -87,15 +82,17 @@ class SetKeyRequest(BaseModel):
 
 @app.get("/health")
 def health_check():
-    """Service health check endpoint."""
+    """Report PostgreSQL and Qdrant status independently."""
     db_alive = check_db_health()
+    vector_status = qdrant_health()
     return {
-        "status": "ok" if db_alive else "degraded",
+        "status": "ok" if db_alive and vector_status["connected"] else "degraded",
         "service": "rag-service",
         "version": "3.0.0",
         "database": {
             "connected": db_alive,
         },
+        "vector_store": vector_status,
         "embedding": {
             "model": embedder.model_name,
             "is_semantic": embedder.is_semantic,

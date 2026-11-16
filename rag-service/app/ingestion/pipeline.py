@@ -1,22 +1,10 @@
-import os
-import json
 from pathlib import Path
-from psycopg2.extras import execute_values
 from app.database.connection import get_db_connection
+from app.database.qdrant_store import replace_document_chunks
 from app.ingestion.transcript_parser import TranscriptParser
 from app.ingestion.pdf_parser import PDFParser
 from app.ingestion.chunker import chunker
-from app.embeddings.embedder import embedder
 from app.ingestion.extract_pdf_financials import populate_extracted_financials
-
-# Mapping of document type keywords to schema doc types
-DOC_TYPE_MAP = {
-    "quarterly": "quarterly_results",
-    "ppt": "investor_presentation",
-    "annual": "annual_report",
-    "transcript": "conference_call_transcript",
-}
-
 
 def classify_document(filename: str) -> dict:
     """
@@ -92,8 +80,7 @@ def classify_document(filename: str) -> dict:
 
 def ingest_itc_transcript():
     """
-    Ingests the Q4 FY24 conference call transcript for ITC Limited into PostgreSQL.
-    Stores document metadata in 'documents' and structured chunks with speaker attribution in 'document_chunks'.
+    Ingests the Q4 FY24 transcript into PostgreSQL metadata and Qdrant vectors.
     """
     transcript_path = Path(__file__).parent.parent.parent / "data" / "itc_q4_fy24_transcript.txt"
     if not transcript_path.exists():
@@ -127,8 +114,7 @@ def ingest_itc_transcript():
 
         if existing_doc:
             doc_id = existing_doc[0]
-            print(f"[Pipeline] Document already exists with ID: {doc_id}. Cleaning existing chunks...")
-            cur.execute("DELETE FROM document_chunks WHERE document_id = %s;", (doc_id,))
+            print(f"[Pipeline] Document already exists with ID: {doc_id}. Qdrant points will be refreshed after parsing.")
         else:
             cur.execute(
                 """
@@ -163,43 +149,16 @@ def ingest_itc_transcript():
         chunks = chunker.chunk_transcript_turns(turns, company_id=company_id, document_id=doc_id)
         print(f"[Pipeline] Created {len(chunks)} search chunks.")
 
-        # 5. Generate dense vector embeddings
-        print("[Pipeline] Generating vector embeddings for chunks...")
-        contents = [c["content"] for c in chunks]
-        embeddings = embedder.embed_batch(contents)
-
-        # 6. Insert chunks into document_chunks table
-        print("[Pipeline] Storing chunks in PostgreSQL document_chunks table...")
-        insert_query = """
-            INSERT INTO document_chunks (
-                document_id, company_id, chunk_index, content, token_count,
-                page_number, speaker_name, speaker_role, is_management, section, embedding
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """
-
-        for c, emb in zip(chunks, embeddings):
-            # Format embedding vector as JSON string
-            emb_serialized = json.dumps(emb)
-            cur.execute(
-                insert_query,
-                (
-                    c["document_id"],
-                    c["company_id"],
-                    c["chunk_index"],
-                    c["content"],
-                    c["token_count"],
-                    c["page_number"],
-                    c["speaker_name"],
-                    c["speaker_role"],
-                    c["is_management"],
-                    c["section"],
-                    emb_serialized,
-                )
-            )
-
         conn.commit()
-        print(f"[Pipeline] Successfully ingested {len(chunks)} chunks for {doc_title}! [OK]")
-        return len(chunks)
+        stored_count = replace_document_chunks(chunks, {
+            "document_title": doc_title,
+            "document_type": "conference_call_transcript",
+            "fiscal_year": 2024,
+            "fiscal_quarter": "Q4",
+            "ticker": "ITC",
+        })
+        print(f"[Pipeline] Successfully ingested {stored_count} Qdrant chunks for {doc_title}! [OK]")
+        return stored_count
 
     except Exception as e:
         conn.rollback()
@@ -290,8 +249,7 @@ def ingest_uploaded_documents(ticker: str = "ITC"):
                 existing = cur.fetchone()
                 if existing:
                     doc_id = existing[0]
-                    print(f"[Pipeline]   Document already exists (ID: {doc_id}). Re-ingesting...")
-                    cur.execute("DELETE FROM document_chunks WHERE document_id = %s;", (doc_id,))
+                    print(f"[Pipeline]   Document already exists (ID: {doc_id}). Qdrant points will be refreshed after parsing.")
                 else:
                     cur.execute(
                         """
@@ -336,45 +294,22 @@ def ingest_uploaded_documents(ticker: str = "ITC"):
                 chunks = chunker.chunk_pdf_pages(pages, company_id=company_id, document_id=doc_id)
                 print(f"[Pipeline]   Created {len(chunks)} search chunks.")
 
-                # Generate embeddings
-                print("[Pipeline]   Generating vector embeddings...")
-                contents = [c["content"] for c in chunks]
-                embeddings = embedder.embed_batch(contents)
-
-                # Store chunks in batch using execute_values
-                insert_query = """
-                    INSERT INTO document_chunks (
-                        document_id, company_id, chunk_index, content, token_count,
-                        page_number, speaker_name, speaker_role, is_management, section, embedding
-                    ) VALUES %s;
-                """
-                chunk_tuples = [
-                    (
-                        c["document_id"],
-                        c["company_id"],
-                        c["chunk_index"],
-                        c["content"],
-                        c["token_count"],
-                        c["page_number"],
-                        c["speaker_name"],
-                        c["speaker_role"],
-                        c["is_management"],
-                        c["section"],
-                        json.dumps(emb),
-                    )
-                    for c, emb in zip(chunks, embeddings)
-                ]
-                execute_values(cur, insert_query, chunk_tuples, page_size=200)
-
                 conn.commit()
+                stored_count = replace_document_chunks(chunks, {
+                    "document_title": doc_title,
+                    "document_type": doc_type,
+                    "fiscal_year": int(fiscal_year),
+                    "fiscal_quarter": fiscal_quarter,
+                    "ticker": ticker,
+                })
                 results["ingested"].append({
                     "file": filename,
                     "doc_id": doc_id,
-                    "chunks": len(chunks),
+                    "chunks": stored_count,
                     "pages": len(pages),
                     "type": doc_type,
                 })
-                print(f"[Pipeline]   [OK] Ingested {len(chunks)} chunks for {doc_title}")
+                print(f"[Pipeline]   [OK] Ingested {stored_count} Qdrant chunks for {doc_title}")
 
             except Exception as file_err:
                 conn.rollback()

@@ -10,7 +10,7 @@ The **AI Financial Research Terminal** provides equity analysts, portfolio manag
 
 Unlike generic AI chatbots that calculate financial figures unpredictably and hallucinate numbers, this platform enforces a strict **separation of concerns**:
 * **Deterministic Financials**: Historical statements (Revenue, EBITDA, Net Profit, EPS) and computed financial ratios (Operating Margin, Net Margin, RoE, Debt/Equity) are stored in PostgreSQL and calculated deterministically in backend code.
-* **Context-Grounded Qualitative RAG**: An intelligent AI analyst built with Python/FastAPI and **pgvector** answers qualitative inquiries (*"Why did operating margins decline?"*, *"What were management's growth expectations for FMCG?"*) using official annual reports, quarterly filings, and conference-call transcripts.
+* **Context-Grounded Qualitative RAG**: A Python/FastAPI service uses **Qdrant** for document vectors, LangChain for retrieval and Gemini orchestration, and Ragas for repeatable evaluation over company filings and transcripts.
 * **First-Class Transcript Processing**: Conference call transcripts preserve speaker designations (CEO, CFO, Analyst), distinguishing prepared executive remarks from critical Q&A inquiries.
 * **Audit-Grade Citations**: Every factual claim is backed by explicit document titles, fiscal periods, page numbers (for PDFs), and speaker identities (for transcripts).
 
@@ -23,9 +23,8 @@ Anchor company for initial development: **ITC Limited (NSE: ITC)**.
 ```text
 Frontend:       React 18, Vite, JavaScript (ESM), Tailwind CSS, React Router, Recharts, Lucide Icons
 Main Backend:   Node.js (ESM), Express.js, Drizzle ORM, PostgreSQL connection pool, JWT, bcrypt
-AI / RAG:       Python 3.10+, FastAPI, Uvicorn, Google Gemini API (gemini-3.6-flash / gemini-flash-latest),
-                SentenceTransformers (all-MiniLM-L6-v2, 384-d), PyPDF, Offline Extractive Synthesis Engine
-Database:       PostgreSQL 15+ with pgvector extension (1,679+ vector embeddings indexed)
+AI / RAG:       Python 3.10+, FastAPI, LangChain, Google Gemini, SentenceTransformers (all-MiniLM-L6-v2, 384-d), Ragas
+Databases:      PostgreSQL for relational app data; Qdrant for chunk vectors and retrieval metadata
 Testing:        Node.js test runner, Pytest
 Architecture:   Decoupled Dual-Backend Microservice Pattern (Express on 5000, FastAPI on 8000)
 Methodology:    Solo-Developer Agile / Scrum (9 Iterative Sprints)
@@ -70,17 +69,15 @@ Methodology:    Solo-Developer Agile / Scrum (9 Iterative Sprints)
               │             ▼ (Online)                   ▼ (Offline Fallback)
               │     ┌───────────────────┐        ┌───────────────────┐
               │     │   Google Gemini   │        │ Local Extractive  │
-              │     │  gemini-3.6-flash │        │ Synthesis Engine  │
+              │     │  gemini-2.5-flash │        │ Synthesis Engine  │
               │     └───────────────────┘        └───────────────────┘
               │                           │
               ▼                           ▼ Vector Search / Raw Chunks
        ┌─────────────────────────────────────────────────────────────┐
-       │                     PostgreSQL Database                     │
-       │                 + pgvector Extension (Port 5432)            │
-       │  • users, companies, financial_metrics, documents           │
-       │  • document_chunks (1,679 dense vectors with speaker tags)  │
-       │  • chat_sessions, chat_messages, watchlists                 │
-       └─────────────────────────────────────────────────────────────┘
+       │  PostgreSQL (app data)     │       Qdrant (RAG vectors)       │
+       │ users, companies, metrics, │       chunks + embeddings +      │
+       │ documents, chats, watchlist│       citation metadata          │
+       └───────────────────────────┴──────────────────────────────────┘
 ```
 
 ---
@@ -117,10 +114,11 @@ Financial_terminal/
 │   └── src/context/                # AuthContext state management
 │
 └── rag-service/                    # [Sprints 5-7] Python FastAPI RAG Service
-    ├── app/generation/             # Google Gemini 3.6 Flash & Local Extractive generator
-    ├── app/retrieval/              # Vector search with financial domain re-ranking
+    ├── app/generation/             # LangChain Gemini chain & offline extractive fallback
+    ├── app/retrieval/              # Qdrant vector search with metadata filters and re-ranking
     ├── app/ingestion/              # PDF extractor, transcript parser, chunker, PDF financials parser
-    ├── app/embeddings/             # SentenceTransformers 384-d dense embedding engine
+    ├── app/embeddings/             # SentenceTransformers 384-d LangChain embedding adapter
+    ├── app/evaluation/             # Ragas benchmark dataset, runner, legacy migration helper
     └── tests/                      # Ingestion, chunking, and health test suites
 ```
 
@@ -135,8 +133,8 @@ Financial_terminal/
 | **Sprint 2** | **Authentication & Security** | User registration, bcrypt hashing, JWT auth, protected `/me` | **Completed** |
 | **Sprint 3** | **Companies & Financials** | Deterministic ratio engine (Gross/Op/Net Margin, RoE, D/E, FCF), company search | **Completed** |
 | **Sprint 4** | **React Frontend Terminal** | Modern dark terminal UI, Recharts visualization, statement tables, auth flows | **Completed** |
-| **Sprint 5** | **Python RAG & Ingestion** | PDF text extractor, conference-call speaker parser, chunker, pgvector embeddings | **Completed** |
-| **Sprint 6** | **AI Analyst & Grounded Chat** | End-to-end RAG, Google Gemini 3.6 Flash, Local Extractive engine, citations drawer, click-to-PDF | **Completed** |
+| **Sprint 5** | **Python RAG & Ingestion** | PDF text extractor, transcript speaker parser, chunker, Qdrant vectors | **Completed** |
+| **Sprint 6** | **AI Analyst & Grounded Chat** | LangChain Gemini generation, grounded answers, citations drawer, click-to-PDF | **Completed** |
 | **Sprint 7** | **Advanced Features & Automation** | Real PDF financial extraction (`extract_pdf_financials.py`), dynamic multi-year compilation, interactive filings hub | **In Progress** (Watchlists & Eval next) |
 | **Sprint 8** | **Testing, Security & Deployment** | Full integration test harness, security audit, non-Docker production deployment runbook | Planned |
 
@@ -147,7 +145,8 @@ Financial_terminal/
 ### Prerequisites
 * **Node.js**: v18+ LTS
 * **Python**: v3.10+ (tested on Python 3.12)
-* **PostgreSQL**: v15+ with `pgvector` extension enabled
+* **PostgreSQL**: v15+ for relational application data
+* **Qdrant**: local service or Qdrant Cloud for document vectors
 
 ### Step-by-Step Setup
 
@@ -155,8 +154,9 @@ Financial_terminal/
    ```sql
    CREATE DATABASE financial_terminal;
    \c financial_terminal;
-   CREATE EXTENSION IF NOT EXISTS vector;
    ```
+
+   Start the local Qdrant service from the repository root with `docker compose up -d qdrant`, or set `QDRANT_URL` and `QDRANT_API_KEY` for Qdrant Cloud.
 
 2. **Express Backend**:
    ```bash
@@ -178,6 +178,9 @@ Financial_terminal/
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/financial_terminal
+   QDRANT_URL=http://localhost:6333
+   QDRANT_COLLECTION=financial_documents
+   LLM_MODEL=gemini-2.5-flash
    ```
    Run the RAG service:
    ```bash
@@ -201,6 +204,13 @@ Financial_terminal/
    # RAG Service tests (Ingestion & Parsing)
    cd rag-service && pytest tests/
    ```
+
+6. **Run RAG quality evaluation** (after ingesting the benchmark source documents and configuring `GEMINI_API_KEY`):
+   ```bash
+   cd rag-service
+   python -m app.evaluation.runner
+   ```
+   The runner saves measured JSON and CSV results under `rag-service/reports/`.
 
 ---
 

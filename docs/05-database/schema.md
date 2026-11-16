@@ -1,4 +1,4 @@
-# Database Schema Specification — PostgreSQL + pgvector
+# Database Schema Specification — PostgreSQL + Qdrant
 
 This document specifies the relational database schema implemented via **Drizzle ORM** for PostgreSQL.
 
@@ -103,24 +103,9 @@ Catalog of corporate filings and transcripts.
 
 ---
 
-### 1.5 `document_chunks` Table (Vector Storage)
-Stores partitioned text chunks and high-dimensional embeddings for RAG retrieval.
+### RAG Vector Collection (Qdrant)
 
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `SERIAL` | Primary Key | Unique chunk identifier |
-| `document_id` | `INTEGER` | Foreign Key -> `documents(id)` ON DELETE CASCADE | Parent document |
-| `company_id` | `INTEGER` | Foreign Key -> `companies(id)` ON DELETE CASCADE | Denormalized company ID for fast filtering |
-| `chunk_index` | `INTEGER` | NOT NULL | Sequential chunk order index |
-| `content` | `TEXT` | NOT NULL | Extracted text chunk content |
-| `token_count` | `INTEGER` | NOT NULL | Number of tokens |
-| `page_number` | `INTEGER` | NULL | Source page number (for PDFs) |
-| `speaker_name` | `VARCHAR(100)` | NULL | Name of speaker (e.g. `Sanjiv Puri`) |
-| `speaker_role` | `VARCHAR(100)` | NULL | Role (e.g. `Chairman & MD`, `Analyst`) |
-| `is_management` | `BOOLEAN` | DEFAULT `FALSE` | TRUE if executive; FALSE if analyst/other |
-| `section` | `VARCHAR(100)` | NULL | e.g. `MD&A`, `Prepared Remarks`, `Q&A` |
-| `embedding` | `vector(1536)` | NULL | Dense pgvector embedding (or 768 for small models) |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | DEFAULT `NOW()` | Creation timestamp |
+RAG chunks and embeddings are stored outside PostgreSQL in the `financial_documents` Qdrant collection. Each point contains a 384-dimensional cosine vector and a payload with `page_content`, `document_id`, `company_id`, `chunk_index`, `token_count`, `page_number`, `speaker_name`, `speaker_role`, `is_management`, `section`, `document_title`, `document_type`, `fiscal_year`, `fiscal_quarter`, and `ticker`. The PostgreSQL `documents` row remains the relational record and source for original PDF paths.
 
 ---
 
@@ -166,23 +151,12 @@ Stores user bookmarked companies.
 
 ## 2. Key Database Indexes
 
-1. **Vector Index (HNSW)**:
-   ```sql
-   CREATE INDEX idx_document_chunks_embedding 
-   ON document_chunks 
-   USING hnsw (embedding vector_cosine_ops);
-   ```
-2. **Metadata Filtering Composite Index**:
-   ```sql
-   CREATE INDEX idx_chunks_company_doc 
-   ON document_chunks (company_id, document_id);
-   ```
-3. **Financial Statement Lookups**:
+1. **Financial Statement Lookups**:
    ```sql
    CREATE UNIQUE INDEX idx_financials_unique_period 
    ON financial_metrics (company_id, period_type, fiscal_year, COALESCE(fiscal_quarter, 'FY'));
    ```
-4. **Watchlist Constraint**:
+2. **Watchlist Constraint**:
    ```sql
    CREATE UNIQUE INDEX idx_watchlist_user_company 
    ON watchlists (user_id, company_id);
